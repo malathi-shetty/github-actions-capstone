@@ -31,14 +31,13 @@ on:
 
     outputs:
       image_url:
-        description: Full Docker image URL
         value: ${{ jobs.docker.outputs.image_url }}
+        description: Full Docker image URL
 
 jobs:
 
   docker:
     runs-on: ubuntu-latest
-
     outputs:
       image_url: ${{ steps.meta.outputs.image_url }}
 
@@ -78,7 +77,7 @@ jobs:
       - name: Set Image Output
         id: meta
         run: |
-          echo "image_url=${{ inputs.image_name }}:${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          echo "image_url=${{ inputs.image_name }}:${{ inputs.tag }}" >> $GITHUB_OUTPUT
 
       # ─────────────────────────────
       # TRIVY SCAN (Security Gate)
