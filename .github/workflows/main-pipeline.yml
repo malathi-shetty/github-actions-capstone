@@ -8,7 +8,6 @@ on:
 permissions:
   contents: write
 
-
 jobs:
 
 # ─────────────────────────────
@@ -23,10 +22,10 @@ jobs:
 
 
 # ─────────────────────────────
-# 2. DOCKER + TRIVY (BLOCK CRITICAL)
+# 2. DOCKER + TRIVY
 # ─────────────────────────────
   docker:
-    name: Docker + Security Scan
+    name: Docker + Trivy
     needs: build-test
     uses: ./.github/workflows/reusable-docker.yml
     with:
@@ -40,11 +39,27 @@ jobs:
 
 
 # ─────────────────────────────
-# 3. VERSION TAG
+# 3. DEPLOY (SIMULATED)
+# ─────────────────────────────
+  deploy:
+    name: Deploy
+    needs: docker
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy App
+        run: |
+          echo "IMAGE: ${{ needs.docker.outputs.image_url }}"
+          echo "Deploying..."
+          echo "Health check passed"
+
+
+# ─────────────────────────────
+# 4. VERSION TAGGING
 # ─────────────────────────────
   versioning:
-    name: Create Git Tag
-    needs: docker
+    name: Git Tag
+    needs: deploy
     runs-on: ubuntu-latest
 
     permissions:
@@ -52,44 +67,20 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Configure Git
+      - name: Create Tag
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
-
-      - name: Create and Push Tag
-        run: |
-          VERSION="v1.0.${GITHUB_RUN_NUMBER}"
-          git tag $VERSION
-          git push origin $VERSION
-
-
-# ─────────────────────────────
-# 4. DEPLOY
-# ─────────────────────────────
-  deploy:
-    name: Deploy
-    needs: [build-test, docker, versioning]
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Deploy App
-        run: |
-          echo "Deploying image..."
-          echo "Pulling image..."
-          echo "Running container..."
-          echo "Health check passed"
-          echo "DONE"
+          git tag v1.0.${GITHUB_RUN_NUMBER}
+          git push origin v1.0.${GITHUB_RUN_NUMBER}
 
 
 # ─────────────────────────────
 # 5. SAVE STATUS
 # ─────────────────────────────
   docker-status:
-    name: Save Docker Status
+    name: Save Status
     needs: docker
     runs-on: ubuntu-latest
 
@@ -107,11 +98,11 @@ jobs:
 
 
 # ─────────────────────────────
-# 6. README AUTO UPDATE (SAFE + STABLE)
+# 6. README AUTO UPDATE (CLEAN FIXED)
 # ─────────────────────────────
   update-readme:
     name: AI Release Notes
-    needs: [build-test, docker, versioning]
+    needs: [build-test, docker]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -139,7 +130,7 @@ jobs:
           echo "" >> release.md
           echo "🚀 System is production ready" >> release.md
 
-      - name: Replace CI section in README (CLEAN)
+      - name: Replace CI block in README
         run: |
           awk '
           /<!-- CI-REPORT-START -->/ {
@@ -154,12 +145,12 @@ jobs:
             next
           }
           !skip
-          ' README.md > README.tmp && mv README.tmp README.md
+          ' README.md > tmp && mv tmp README.md
 
       - name: Commit README
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
           git add README.md
-          git commit -m "docs: clean CI/CD update" || echo "no changes"
+          git commit -m "docs: update release notes" || echo "no changes"
           git push
