@@ -25,12 +25,12 @@ jobs:
 # 2. DOCKER + TRIVY
 # ─────────────────────────────
   docker:
-    name: Docker + Trivy
+    name: Docker + Security Scan
     needs: build-test
     uses: ./.github/workflows/reusable-docker.yml
     with:
       image_name: "shettymalathi113/github-actions-capstone"
-      tag: v1.0.${{ github.run_number }}
+      tag: v1.0.${{ github.run_number }}   # IMPORTANT: simple tag (stable)
       sha_tag: sha-${{ github.sha }}
       push: true
     secrets:
@@ -88,7 +88,7 @@ jobs:
       - name: Create file
         run: |
           echo "STATUS=SUCCESS" > docker-status.txt
-          echo "IMAGE=sha-${GITHUB_SHA::7}" >> docker-status.txt
+          echo "IMAGE=${{ needs.docker.outputs.image_url }}" >> docker-status.txt
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -98,7 +98,7 @@ jobs:
 
 
 # ─────────────────────────────
-# 6. README AUTO UPDATE (CLEAN FIXED)
+# 6. README UPDATE (FIXED OUTPUT USAGE)
 # ─────────────────────────────
   update-readme:
     name: AI Release Notes
@@ -130,20 +130,11 @@ jobs:
           echo "" >> release.md
           echo "🚀 System is production ready" >> release.md
 
-      - name: Replace CI block in README
+      - name: Update README
         run: |
           awk '
-          /<!-- CI-REPORT-START -->/ {
-            print
-            system("cat release.md")
-            skip=1
-            next
-          }
-          /<!-- CI-REPORT-END -->/ {
-            skip=0
-            print
-            next
-          }
+          /<!-- CI-REPORT-START -->/ {print; system("cat release.md"); skip=1; next}
+          /<!-- CI-REPORT-END -->/ {skip=0}
           !skip
           ' README.md > tmp && mv tmp README.md
 
@@ -152,5 +143,5 @@ jobs:
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
           git add README.md
-          git commit -m "docs: update release notes" || echo "no changes"
+          git commit -m "docs: CI update" || echo "no changes"
           git push
