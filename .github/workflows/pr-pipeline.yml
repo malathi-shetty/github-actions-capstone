@@ -21,8 +21,8 @@ jobs:
 
     with:
       node_version: "20"
-      #run_tests: true
-      run_tests: false # to check skip test
+      run_tests: true
+      #run_tests: false # to check skip test
 
   # PR summary job
   pr-comment:
