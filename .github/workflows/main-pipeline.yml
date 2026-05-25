@@ -33,7 +33,7 @@ jobs:
     uses: ./.github/workflows/reusable-docker.yml
 
     with:
-      image_name: ${{ secrets.DOCKER_USERNAME }}/github-actions-capstone
+      image_name: shettymalathi113/github-actions-capstone
       tag: latest
       sha_tag: sha-${{ github.sha }}
       push: true
