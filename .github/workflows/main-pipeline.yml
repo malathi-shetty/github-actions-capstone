@@ -144,6 +144,9 @@ jobs:
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
+          
           git add README.md
-          git commit -m "docs: update release notes" || echo "no changes"
-          git push
+          git commit -m "docs: update release notes" || exit 0
+
+          git pull --rebase origin main || true
+          git push origin HEAD:main
