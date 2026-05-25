@@ -7,7 +7,7 @@ on:
 
 permissions:
   contents: write
-  workflows: write
+
 
 jobs:
 
@@ -40,10 +40,10 @@ jobs:
 
 
 # ─────────────────────────────
-# 3. VERSION TAG (SAFE FIX)
+# 3. VERSION TAG
 # ─────────────────────────────
   versioning:
-    name: Git Tag
+    name: Create Git Tag
     needs: docker
     runs-on: ubuntu-latest
 
@@ -55,12 +55,16 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Create Tag
+      - name: Configure Git
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
-          git tag v1.0.${{ github.run_number }}
-          git push origin v1.0.${{ github.run_number }}
+
+      - name: Create and Push Tag
+        run: |
+          VERSION="v1.0.${GITHUB_RUN_NUMBER}"
+          git tag $VERSION
+          git push origin $VERSION
 
 
 # ─────────────────────────────
@@ -68,16 +72,17 @@ jobs:
 # ─────────────────────────────
   deploy:
     name: Deploy
-    needs: docker
+    needs: [build-test, docker, versioning]
     runs-on: ubuntu-latest
 
     steps:
-      - name: Deploy
+      - name: Deploy App
         run: |
           echo "Deploying image..."
           echo "Pulling image..."
           echo "Running container..."
           echo "Health check passed"
+          echo "DONE"
 
 
 # ─────────────────────────────
@@ -94,14 +99,15 @@ jobs:
           echo "STATUS=SUCCESS" > docker-status.txt
           echo "IMAGE=sha-${GITHUB_SHA::7}" >> docker-status.txt
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
         with:
           name: docker-status
           path: docker-status.txt
 
 
 # ─────────────────────────────
-# 6. README AI OPS UPDATE (CLEAN + NO BUGS)
+# 6. README AUTO UPDATE (SAFE + STABLE)
 # ─────────────────────────────
   update-readme:
     name: AI Release Notes
@@ -121,7 +127,7 @@ jobs:
           echo "" >> release.md
           echo "- Build: ${{ needs.build-test.result }}" >> release.md
           echo "- Docker: Success" >> release.md
-          echo "- Image: ${{ needs.docker.outputs.image_url }}" >> release.md
+          echo "- Image: v1.0.${{ github.run_number }}" >> release.md
           echo "- Version: v1.0.${{ github.run_number }}" >> release.md
           echo "- Commit: $SHORT_SHA" >> release.md
           echo "" >> release.md
@@ -133,7 +139,7 @@ jobs:
           echo "" >> release.md
           echo "🚀 System is production ready" >> release.md
 
-      - name: Replace README section
+      - name: Replace README Section
         run: |
           awk '
           /<!-- CI-REPORT-START -->/ {print; system("cat release.md"); skip=1; next}
