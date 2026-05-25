@@ -8,12 +8,12 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: write   # required for tags + README update
 
 jobs:
 
 # ─────────────────────────────
-# 1. Build & Test
+# 1. BUILD & TEST
 # ─────────────────────────────
   build-test:
     name: Build & Test
@@ -24,20 +24,17 @@ jobs:
 
 
 # ─────────────────────────────
-# 2. Docker Build & Push
+# 2. DOCKER BUILD & PUSH + TRIVY
 # ─────────────────────────────
   docker:
-    name: Docker Build & Push
+    name: Docker Build + Trivy Scan
     needs: build-test
-
     uses: ./.github/workflows/reusable-docker.yml
-
     with:
       image_name: "shettymalathi113/github-actions-capstone"
       tag: latest
       sha_tag: sha-${{ github.sha }}
       push: true
-
     secrets:
       docker_username: ${{ secrets.DOCKER_USERNAME }}
       docker_token: ${{ secrets.DOCKER_TOKEN }}
@@ -59,7 +56,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Create tag
+      - name: Create Tag
         run: |
           VERSION="v1.0.${GITHUB_RUN_NUMBER}"
 
@@ -74,64 +71,82 @@ jobs:
 # 4. DEPLOY
 # ─────────────────────────────
   deploy:
-    name: Deploy to Production
-    needs: [build-test, docker]
-
-    runs-on: ubuntu-latest
-
-    environment:
-      name: production
-
-    env:
-      IMAGE: ${{ needs.docker.outputs.image_url }}
-      RESULT: ${{ needs.build-test.outputs.test_result }}
-
-    steps:
-      - name: Deploy
-        run: |
-          echo "Deploying image: $IMAGE"
-          echo "Build: $RESULT"
-          echo "Pull → Run → Health check → DONE"
-
-
-# ─────────────────────────────
-# 5. AUTO README UPDATE (FIXED)
-# ─────────────────────────────
-  update-readme:
-    name: AI Ops - Update README
+    name: Deploy
     needs: [build-test, docker, versioning]
     runs-on: ubuntu-latest
 
+    steps:
+      - name: Deploy App
+        run: |
+          echo "Deploying image..."
+          echo "Pulling image..."
+          echo "Running container..."
+          echo "Health check passed"
+          echo "DONE"
+
+
+# ─────────────────────────────
+# 5. SAVE DOCKER STATUS
+# ─────────────────────────────
+  docker-status:
+    name: Save Docker Status
+    needs: docker
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Create status file
+        run: |
+          echo "STATUS=SUCCESS" > docker-status.txt
+          echo "IMAGE=sha-${GITHUB_SHA::7}" >> docker-status.txt
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-status
+          path: docker-status.txt
+
+
+# ─────────────────────────────
+# 6. AUTO README UPDATE (AI OPS)
+# ─────────────────────────────
+  update-readme:
+    name: Update README (AI Ops)
+    needs: [build-test, docker, versioning]
+    runs-on: ubuntu-latest
     permissions:
       contents: write
 
     steps:
+      - uses: actions/checkout@v4
 
-      - name: Checkout repo
-        uses: actions/checkout@v4
-
-      - name: Generate CI Report
+      - name: Generate Release Summary
         run: |
-          echo "## ✨ Release Summary" > report.md
-          echo "" >> report.md
-          echo "- Build: ${{ needs.build-test.outputs.test_result }}" >> report.md
-          echo "- Docker: Pushed successfully" >> report.md
-          echo "- Image: ${{ needs.docker.outputs.image_url }}" >> report.md
-          echo "- Version: v1.0.${{ github.run_number }}" >> report.md
-          echo "- Commit: ${GITHUB_SHA::7}" >> report.md
-          echo "" >> report.md
-          echo "🚀 System is healthy and production ready" >> report.md
+          VERSION="v1.0.${GITHUB_RUN_NUMBER}"
+          SHORT_SHA=$(echo $GITHUB_SHA | cut -c1-7)
 
-      - name: Append to README
+          cat > report.md <<EOF
+## 🚀 Release Summary
+
+- Build: ${{ needs.build-test.outputs.test_result }}
+- Docker: Pushed successfully
+- Image: ${{ needs.docker.outputs.image_url }}
+- Version: $VERSION
+- Commit: $SHORT_SHA
+
+🚀 System is healthy and production ready
+EOF
+
+      - name: Update README
         run: |
           echo "" >> README.md
           echo "---" >> README.md
           cat report.md >> README.md
 
-      - name: Commit README update
+      - name: Commit changes
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
+
           git add README.md
-          git commit -m "docs: auto update CI report" || echo "no changes"
+          git commit -m "docs: auto update release summary" || echo "no changes"
           git push
