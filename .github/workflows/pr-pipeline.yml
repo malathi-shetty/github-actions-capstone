@@ -1,0 +1,63 @@
+name: PR Pipeline
+
+on:
+  pull_request:
+    branches:
+      - main
+
+    types:
+      - opened
+      - synchronize
+
+jobs:
+
+  # Build and test only
+  # No Docker build/push on PRs
+  build-test:
+
+    name: Run Build & Test Workflow
+
+    uses: ./.github/workflows/reusable-build-test.yml
+
+    with:
+      node_version: "20"
+      run_tests: true
+      #run_tests: false # to check skip test
+
+  # PR summary job
+  pr-comment:
+
+    name: PR Summary
+
+    needs: build-test
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # Print message in logs
+      - name: Print PR success message
+        run: |
+          echo "PR checks passed for branch: ${{ github.head_ref }}"
+
+      # Add GitHub Actions summary
+      - name: Add workflow summary
+        run: |
+          echo "## PR Pipeline Summary" >> "$GITHUB_STEP_SUMMARY"
+
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          echo "| Key | Value |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|-----|-------|" >> "$GITHUB_STEP_SUMMARY"
+
+          echo "| Branch | \`${{ github.head_ref }}\` |" >> "$GITHUB_STEP_SUMMARY"
+
+          echo "| PR Number | \`#${{ github.event.pull_request.number }}\` |" >> "$GITHUB_STEP_SUMMARY"
+
+          echo "| Test Result | \`${{ needs.build-test.outputs.test_result }}\` |" >> "$GITHUB_STEP_SUMMARY"
+
+          echo "| Docker Build | ❌ Skipped on PRs |" >> "$GITHUB_STEP_SUMMARY"
+
+          echo "| Docker Push | ❌ Skipped on PRs |" >> "$GITHUB_STEP_SUMMARY"
+
+          echo "| Deploy | ❌ Skipped on PRs |" >> "$GITHUB_STEP_SUMMARY"
