@@ -23,73 +23,59 @@ jobs:
 
 
 # ─────────────────────────────
-# 2. DOCKER BUILD + PUSH
+# 2. DOCKER BUILD + TRIVY SCAN
 # ─────────────────────────────
   docker:
-    name: Docker Build + Push
+    name: Docker Build + Trivy Scan
     needs: build-test
+
     uses: ./.github/workflows/reusable-docker.yml
+
     with:
       image_name: "shettymalathi113/github-actions-capstone"
       tag: v1.0.${{ github.run_number }}
       sha_tag: sha-${{ github.sha }}
       push: true
+
     secrets:
       docker_username: ${{ secrets.DOCKER_USERNAME }}
       docker_token: ${{ secrets.DOCKER_TOKEN }}
 
 
 # ─────────────────────────────
-# 3. 🔐 TRIVY SECURITY GATE (BLOCK CRITICAL)
-# ─────────────────────────────
-  security-scan:
-    name: Trivy Security Gate
-    needs: docker
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Run Trivy Scan
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: "shettymalathi113/github-actions-capstone:v1.0.${{ github.run_number }}"
-          format: table
-          severity: CRITICAL,HIGH
-          exit-code: 1
-
-      - name: Upload Scan Report
-        uses: actions/upload-artifact@v4
-        with:
-          name: trivy-report
-          path: trivy-results.sarif
-
-
-# ─────────────────────────────
-# 4. VERSION TAGGING
+# 3. VERSION TAGGING
 # ─────────────────────────────
   versioning:
     name: Create Git Tag
-    needs: security-scan
+    needs: docker
     runs-on: ubuntu-latest
 
+    permissions:
+      contents: write
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Create Tag
         run: |
+          VERSION="v1.0.${GITHUB_RUN_NUMBER}"
+
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
-          git tag v1.0.${GITHUB_RUN_NUMBER}
-          git push origin v1.0.${GITHUB_RUN_NUMBER}
+
+          git tag $VERSION
+          git push origin $VERSION
 
 
 # ─────────────────────────────
-# 5. DEPLOY (SIMULATED)
+# 4. DEPLOY (SIMULATED)
 # ─────────────────────────────
   deploy:
     name: Deploy
-    needs: [build-test, docker, security-scan, versioning]
+    needs: [build-test, docker]
     runs-on: ubuntu-latest
 
     steps:
@@ -103,7 +89,7 @@ jobs:
 
 
 # ─────────────────────────────
-# 6. DOCKER STATUS ARTIFACT
+# 5. SAVE DOCKER STATUS
 # ─────────────────────────────
   docker-status:
     name: Save Docker Status
@@ -111,12 +97,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Create Status File
+      - name: Create status file
         run: |
           echo "STATUS=SUCCESS" > docker-status.txt
           echo "IMAGE=sha-${GITHUB_SHA::7}" >> docker-status.txt
 
-      - name: Upload Artifact
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: docker-status
@@ -124,17 +110,19 @@ jobs:
 
 
 # ─────────────────────────────
-# 7. 🧠 AI OPS README UPDATE (NO EOF VERSION)
+# 6. AI OPS README UPDATE (SAFE + CLEAN)
 # ─────────────────────────────
   update-readme:
     name: AI Ops Release Notes
-    needs: [build-test, docker, security-scan, versioning]
+    needs: [build-test, docker, versioning]
     runs-on: ubuntu-latest
+
     permissions:
       contents: write
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
       - name: Generate Release Notes
         run: |
@@ -149,25 +137,23 @@ jobs:
           echo "- Commit: $SHORT_SHA" >> release.md
           echo "" >> release.md
           echo "## 🔐 Security" >> release.md
-          echo "- Trivy Scan: CRITICAL/HIGH enforced" >> release.md
+          echo "- Trivy Scan: Enabled (CRITICAL/HIGH enforced)" >> release.md
           echo "" >> release.md
           echo "## 📦 Pipeline Flow" >> release.md
           echo "Build → Test → Docker → Security Scan → Tag → Deploy" >> release.md
           echo "" >> release.md
           echo "🚀 System is production ready" >> release.md
 
-      - name: Update README Section
+      - name: Update README
         run: |
-          awk '
-          /<!-- CI-REPORT-START -->/ {print; system("cat release.md"); skip=1; next}
-          /<!-- CI-REPORT-END -->/ {skip=0}
-          !skip
-          ' README.md > tmp && mv tmp README.md
+          echo "" >> README.md
+          echo "---" >> README.md
+          cat release.md >> README.md
 
-      - name: Commit README Update
+      - name: Commit README changes
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
           git add README.md
-          git commit -m "docs: AI release update" || echo "no changes"
+          git commit -m "docs: auto update release notes" || echo "no changes"
           git push
