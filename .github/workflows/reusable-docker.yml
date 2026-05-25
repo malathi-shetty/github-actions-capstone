@@ -27,6 +27,7 @@ on:
 
     outputs:
       image_url:
+        description: "Docker image full URL"
         value: ${{ jobs.docker.outputs.image_url }}
 
 jobs:
@@ -35,7 +36,7 @@ jobs:
     runs-on: ubuntu-latest
 
     outputs:
-      image_url: ${{ steps.meta.outputs.image_url }}
+      image_url: ${{ steps.set-image.outputs.image_url }}
 
     steps:
       - uses: actions/checkout@v4
@@ -68,11 +69,17 @@ jobs:
           tags: ${{ steps.tags.outputs.tags }}
 
       - name: Set Image Output
-        id: meta
+        id: set-image
         run: |
           IMAGE="${{ inputs.image_name }}:${{ inputs.tag }}"
           echo "image_url=$IMAGE" >> "$GITHUB_OUTPUT"
           echo "Built image: $IMAGE"
+
+      - name: Debug Image
+        run: echo "IMAGE IS ${{ inputs.image_name }}:${{ inputs.tag }}"
+
+      - name: Debug Output
+        run: echo "${{ steps.set-image.outputs.image_url }}"
 
       # ─────────────────────────────
       # SECURITY (REAL DEVSECOPS STEP)
