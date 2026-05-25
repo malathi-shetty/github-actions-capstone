@@ -30,7 +30,8 @@ jobs:
     runs-on: ubuntu-latest
 
     outputs:
-      test_result: ${{ steps.test-result.outputs.test_result }}
+      #test_result: ${{ steps.test-result.outputs.test_result }}
+      test_result: ${{ steps.test-result.outputs.test_result || steps.skip-tests.outputs.test_result }}
 
     steps:
 
@@ -81,3 +82,4 @@ jobs:
           echo "| Node version | \`${{ inputs.node_version }}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Tests enabled | \`${{ inputs.run_tests }}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Commit | \`$(echo "${{ github.sha }}" | cut -c1-7)\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Test result | \`${{ steps.test-result.outputs.test_result || steps.skip-tests.outputs.test_result }}\` |" >> "$GITHUB_STEP_SUMMARY"
