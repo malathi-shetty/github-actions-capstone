@@ -7,16 +7,13 @@ on:
       image_name:
         required: true
         type: string
-
       tag:
         required: true
         type: string
-
       sha_tag:
         required: false
         type: string
         default: ""
-
       push:
         required: false
         type: boolean
@@ -38,7 +35,7 @@ jobs:
     runs-on: ubuntu-latest
 
     outputs:
-      image_url: ${{ steps.output.outputs.image_url }}
+      image_url: ${{ steps.image.outputs.image_url }}
 
     steps:
       - uses: actions/checkout@v4
@@ -70,12 +67,12 @@ jobs:
           push: ${{ inputs.push }}
           tags: ${{ steps.tags.outputs.tags }}
 
-      - name: Set Output Image
-        id: output
+      - name: Set Image Output
+        id: image
         run: |
           IMAGE="${{ inputs.image_name }}:${{ inputs.tag }}"
           echo "image_url=$IMAGE" >> "$GITHUB_OUTPUT"
-          echo "IMAGE BUILT: $IMAGE"
+          echo "IMAGE=$IMAGE"
 
       - name: Trivy Scan (CRITICAL BLOCK)
         uses: aquasecurity/trivy-action@master
@@ -86,7 +83,7 @@ jobs:
           severity: CRITICAL,HIGH
           exit-code: 1
 
-      - name: Upload Scan Report
+      - name: Upload Trivy Report
         uses: actions/upload-artifact@v4
         with:
           name: trivy-report
