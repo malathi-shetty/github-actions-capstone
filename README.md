@@ -48,7 +48,7 @@ Build → Test → Docker → Scan → Tag → Deploy
 ### 🐳 Docker Metrics
 ![Pulls](https://img.shields.io/docker/pulls/shettymalathi113/github-actions-capstone)
 ![Size](https://img.shields.io/docker/image-size/shettymalathi113/github-actions-capstone/latest)
-![Version](https://img.shields.io/github/v/tag/shettymalathi113/github-actions-capstone)
+![Version](https://img.shields.io/github/v/tag/malathi-shetty/github-actions-capstone)
 
 ---
 
