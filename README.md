@@ -12,3 +12,14 @@
 ![Pulls](https://img.shields.io/docker/pulls/shettymalathi113/github-actions-capstone)
 ![Size](https://img.shields.io/docker/image-size/shettymalathi113/github-actions-capstone/latest)
 ![Version](https://img.shields.io/github/v/tag/shettymalathi113/github-actions-capstone)
+
+---
+## ✨ Release Summary
+
+- Build: passed
+- Docker: Pushed successfully
+- Image: 
+- Version: v1.0.27
+- Commit: a0f1503
+
+🚀 System is healthy and production ready
