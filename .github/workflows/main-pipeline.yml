@@ -7,11 +7,14 @@ on:
 
   workflow_dispatch:
 
+permissions:
+  contents: write   # REQUIRED for git tag + README update
+
 jobs:
 
-  # ─────────────────────────────
-  # Job 1 — Build & Test
-  # ─────────────────────────────
+# ─────────────────────────────
+# 1. Build & Test
+# ─────────────────────────────
   build-test:
     name: Build & Test
     uses: ./.github/workflows/reusable-build-test.yml
@@ -19,31 +22,10 @@ jobs:
       node_version: "20"
       run_tests: true
 
-  # ─────────────────────────────
-  # Job 2 — Create Git Tag
-  # ─────────────────────────────
-  versioning:
-    name: Create Git Tag
-    runs-on: ubuntu-latest
-    needs: build-test
 
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Create tag
-        run: |
-          VERSION="v1.0.${GITHUB_RUN_NUMBER}"
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
-          git tag $VERSION
-          git push origin $VERSION
-
-  # ─────────────────────────────
-  # Job 3 — Docker Build & Push
-  # ─────────────────────────────
+# ─────────────────────────────
+# 2. Docker Build & Push
+# ─────────────────────────────
   docker:
     name: Docker Build & Push
     needs: build-test
@@ -52,7 +34,7 @@ jobs:
 
     with:
       image_name: "shettymalathi113/github-actions-capstone"
-      tag: v1.0.${{ github.run_number }}
+      tag: latest
       sha_tag: sha-${{ github.sha }}
       push: true
 
@@ -60,37 +42,96 @@ jobs:
       docker_username: ${{ secrets.DOCKER_USERNAME }}
       docker_token: ${{ secrets.DOCKER_TOKEN }}
 
-  # ─────────────────────────────
-  # Job 4 — Deploy
-  # ─────────────────────────────
+
+# ─────────────────────────────
+# 3. VERSION TAGGING (FIXED)
+# ─────────────────────────────
+  versioning:
+    name: Create Git Tag
+    needs: docker
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create tag
+        run: |
+          VERSION="v1.0.${GITHUB_RUN_NUMBER}"
+
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+
+          git tag $VERSION
+          git push origin $VERSION
+
+
+# ─────────────────────────────
+# 4. DEPLOY
+# ─────────────────────────────
   deploy:
     name: Deploy to Production
     needs: docker
+
     runs-on: ubuntu-latest
 
     environment:
       name: production
 
+    env:
+      IMAGE: ${{ needs.docker.outputs.image_url }}
+      RESULT: ${{ needs.build-test.outputs.test_result }}
+
     steps:
       - name: Deploy
         run: |
-          echo "Deploying image: ${{ needs.docker.outputs.image_url }}"
-          echo "Pulling image..."
-          echo "Starting container..."
-          echo "Health check passed"
-          echo "DONE"
+          echo "Deploying image: $IMAGE"
+          echo "Build: $RESULT"
+          echo "Pull → Run → Health check → DONE"
 
-      - name: Deployment summary
+
+# ─────────────────────────────
+# 5. AUTO README UPDATE (AI-OPS STYLE)
+# ─────────────────────────────
+  update-readme:
+    name: AI Ops - Update README
+    needs: [build-test, docker, versioning]
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate CI Report
         run: |
-          echo "## Production Deployment" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
+          cat <<EOF > report.md
+## ✨ Release Summary
 
-          echo "| Key | Value |" >> "$GITHUB_STEP_SUMMARY"
-          echo "|-----|-------|" >> "$GITHUB_STEP_SUMMARY"
+- Build: ${{ needs.build-test.outputs.test_result }}
+- Docker: Pushed successfully
+- Image: ${{ needs.docker.outputs.image_url }}
+- Version: v1.0.${GITHUB_RUN_NUMBER}
+- Commit: ${GITHUB_SHA::7}
 
-          echo "| Environment | production |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Triggered by | ${{ github.actor }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Image | \`$IMAGE\` |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Build & Test | $RESULT |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Commit | \`$(echo "${GITHUB_SHA}" | cut -c1-7)\` |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Status | Deploy simulated |" >> "$GITHUB_STEP_SUMMARY"
+🚀 System is healthy and production ready
+EOF
+
+      - name: Append to README
+        run: |
+          echo "" >> README.md
+          echo "---" >> README.md
+          cat report.md >> README.md
+
+      - name: Commit README update
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add README.md
+          git commit -m "docs: auto update CI report" || echo "no changes"
+          git push
