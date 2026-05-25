@@ -1,3 +1,26 @@
+# 🚀 DevSecOps CI/CD Pipeline
+
+## 📌 Project Overview
+Node.js app with full CI/CD + security pipeline.
+
+---
+
+## 🛠️ Tech Stack
+- Node.js
+- Docker
+- GitHub Actions
+- Trivy
+
+---
+
+## 📊 CI/CD Dashboard
+
+<!-- CI-REPORT-START -->
+_Last updated by GitHub Actions_
+<!-- CI-REPORT-END -->
+
+---
+
 ## 🚀 CI/CD Pipeline Status
 
 ### 🔄 Workflows
@@ -14,40 +37,23 @@
 ![Version](https://img.shields.io/github/v/tag/shettymalathi113/github-actions-capstone)
 
 ---
-## ✨ Release Summary
 
-- Build: passed
-- Docker: Pushed successfully
-- Image: 
-- Version: v1.0.27
-- Commit: a0f1503
+## 🧩 CI/CD Architecture
 
-🚀 System is healthy and production ready
-
----
-## ✨ Release Summary
-
-- Build: passed
-- Docker: Pushed successfully
-- Image: 
-- Version: v1.0.28
-- Commit: 74c33a0
-
-🚀 System is healthy and production ready
-
----
-## 🚀 Release Summary
-
-- Build: passed
-- Docker: Pushed successfully
-- Image: 
-- Version: v1.0.32
-- Commit: 10dcdca
-
-## 🔐 Security
-- Trivy Scan: Executed (CRITICAL/HIGH blocked)
-
-## 📦 Pipeline Flow
-Build → Test → Docker → Scan → Tag → Deploy
-
-🚀 System is stable and production ready
+```Markdown
+GitHub Push
+↓
+Build & Test
+↓
+Trivy Scan
+↓
+Docker Build
+↓
+Push to Docker Hub
+↓
+Git Tag Release
+↓
+Deploy
+↓
+README Auto Update
+```
