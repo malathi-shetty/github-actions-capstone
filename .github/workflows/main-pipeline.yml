@@ -23,10 +23,10 @@ jobs:
 
 
 # ─────────────────────────────
-# 2. DOCKER + TRIVY (REAL SCAN INSIDE REUSABLE)
+# 2. DOCKER BUILD + PUSH
 # ─────────────────────────────
   docker:
-    name: Docker Build + Trivy Scan
+    name: Docker Build + Push
     needs: build-test
     uses: ./.github/workflows/reusable-docker.yml
     with:
@@ -40,38 +40,56 @@ jobs:
 
 
 # ─────────────────────────────
-# 3. VERSION TAGGING (FIXED PERMISSIONS)
+# 3. 🔐 TRIVY SECURITY GATE (BLOCK CRITICAL)
 # ─────────────────────────────
-  versioning:
-    name: Create Git Tag
+  security-scan:
+    name: Trivy Security Gate
     needs: docker
     runs-on: ubuntu-latest
 
-    permissions:
-      contents: write
+    steps:
+      - name: Run Trivy Scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: "shettymalathi113/github-actions-capstone:v1.0.${{ github.run_number }}"
+          format: table
+          severity: CRITICAL,HIGH
+          exit-code: 1
+
+      - name: Upload Scan Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-report
+          path: trivy-results.sarif
+
+
+# ─────────────────────────────
+# 4. VERSION TAGGING
+# ─────────────────────────────
+  versioning:
+    name: Create Git Tag
+    needs: security-scan
+    runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Create Git Tag
+      - name: Create Tag
         run: |
-          VERSION="v1.0.${GITHUB_RUN_NUMBER}"
-
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
-
-          git tag $VERSION
-          git push origin $VERSION
+          git tag v1.0.${GITHUB_RUN_NUMBER}
+          git push origin v1.0.${GITHUB_RUN_NUMBER}
 
 
 # ─────────────────────────────
-# 4. DEPLOY (SIMULATED)
+# 5. DEPLOY (SIMULATED)
 # ─────────────────────────────
   deploy:
     name: Deploy
-    needs: [build-test, docker]
+    needs: [build-test, docker, security-scan, versioning]
     runs-on: ubuntu-latest
 
     steps:
@@ -85,7 +103,7 @@ jobs:
 
 
 # ─────────────────────────────
-# 5. DOCKER STATUS ARTIFACT
+# 6. DOCKER STATUS ARTIFACT
 # ─────────────────────────────
   docker-status:
     name: Save Docker Status
@@ -93,12 +111,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Create status file
+      - name: Create Status File
         run: |
           echo "STATUS=SUCCESS" > docker-status.txt
           echo "IMAGE=sha-${GITHUB_SHA::7}" >> docker-status.txt
 
-      - name: Upload artifact
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: docker-status
@@ -106,13 +124,12 @@ jobs:
 
 
 # ─────────────────────────────
-# 6. AI OPS README UPDATE (SAFE VERSION - NO YAML BREAKS)
+# 7. 🧠 AI OPS README UPDATE (NO EOF VERSION)
 # ─────────────────────────────
   update-readme:
     name: AI Ops Release Notes
-    needs: [build-test, docker, versioning]
+    needs: [build-test, docker, security-scan, versioning]
     runs-on: ubuntu-latest
-
     permissions:
       contents: write
 
@@ -121,37 +138,36 @@ jobs:
 
       - name: Generate Release Notes
         run: |
-          VERSION="v1.0.${GITHUB_RUN_NUMBER}"
           SHORT_SHA=$(echo $GITHUB_SHA | cut -c1-7)
 
-          {
-            echo "## 🚀 Release Summary"
-            echo ""
-            echo "- Build: ${{ needs.build-test.outputs.test_result }}"
-            echo "- Docker: Pushed successfully"
-            echo "- Image: ${{ needs.docker.outputs.image_url }}"
-            echo "- Version: $VERSION"
-            echo "- Commit: $SHORT_SHA"
-            echo ""
-            echo "## 🔐 Security"
-            echo "- Trivy Scan: Executed (CRITICAL/HIGH blocked)"
-            echo ""
-            echo "## 📦 Pipeline Flow"
-            echo "Build → Test → Docker → Scan → Tag → Deploy"
-            echo ""
-            echo "🚀 System is stable and production ready"
-          } > release.md
+          echo "## 🚀 Release Summary" > release.md
+          echo "" >> release.md
+          echo "- Build: ${{ needs.build-test.result }}" >> release.md
+          echo "- Docker: Pushed successfully" >> release.md
+          echo "- Image: ${{ needs.docker.outputs.image_url }}" >> release.md
+          echo "- Version: v1.0.${GITHUB_RUN_NUMBER}" >> release.md
+          echo "- Commit: $SHORT_SHA" >> release.md
+          echo "" >> release.md
+          echo "## 🔐 Security" >> release.md
+          echo "- Trivy Scan: CRITICAL/HIGH enforced" >> release.md
+          echo "" >> release.md
+          echo "## 📦 Pipeline Flow" >> release.md
+          echo "Build → Test → Docker → Security Scan → Tag → Deploy" >> release.md
+          echo "" >> release.md
+          echo "🚀 System is production ready" >> release.md
 
-      - name: Append to README
+      - name: Update README Section
         run: |
-          echo "" >> README.md
-          echo "---" >> README.md
-          cat release.md >> README.md
+          awk '
+          /<!-- CI-REPORT-START -->/ {print; system("cat release.md"); skip=1; next}
+          /<!-- CI-REPORT-END -->/ {skip=0}
+          !skip
+          ' README.md > tmp && mv tmp README.md
 
-      - name: Commit changes
+      - name: Commit README Update
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
           git add README.md
-          git commit -m "docs: AI release notes update" || echo "no changes"
+          git commit -m "docs: AI release update" || echo "no changes"
           git push
