@@ -19,16 +19,16 @@ Node.js app with full CI/CD + security pipeline.
 ## 🚀 Release Summary
 
 - Build: success
-- Docker: Success
+- Docker: Pushed successfully
 - Image: 
-- Version: v1.0.39
-- Commit: 68e5ede
+- Version: v1.0.35
+- Commit: be05c35
 
 ## 🔐 Security
 - Trivy Scan: CRITICAL/HIGH enforced
 
-## 📦 Flow
-Build → Test → Docker → Scan → Tag → Deploy
+## 📦 Pipeline Flow
+Build → Test → Docker → Security Scan → Tag → Deploy
 
 🚀 System is production ready
 <!-- CI-REPORT-END -->
@@ -54,22 +54,26 @@ Build → Test → Docker → Scan → Tag → Deploy
 
 ## 🧩 CI/CD Architecture
 
-```Markdown
+```bash
 GitHub Push
-↓
+   ↓
 Build & Test
-↓
-Trivy Scan
-↓
+   ↓
+Trivy Scan (BLOCK CRITICAL)
+   ↓
 Docker Build
-↓
+   ↓
+Tag Release (ONLY if scan passes)
+   ↓
 Push to Docker Hub
-↓
+   ↓
 Git Tag Release
-↓
+   ↓
 Deploy
-↓
-README Auto Update
+   ↓
+Save Artifact
+   ↓
+AI Release Notes → README update (replace section)
 ```
 
 ---
