@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write   # REQUIRED for git tag + README update
+  contents: write
 
 jobs:
 
@@ -44,7 +44,7 @@ jobs:
 
 
 # ─────────────────────────────
-# 3. VERSION TAGGING (FIXED)
+# 3. VERSION TAGGING
 # ─────────────────────────────
   versioning:
     name: Create Git Tag
@@ -75,7 +75,7 @@ jobs:
 # ─────────────────────────────
   deploy:
     name: Deploy to Production
-    needs: docker
+    needs: [build-test, docker]
 
     runs-on: ubuntu-latest
 
@@ -95,7 +95,7 @@ jobs:
 
 
 # ─────────────────────────────
-# 5. AUTO README UPDATE (AI-OPS STYLE)
+# 5. AUTO README UPDATE (FIXED)
 # ─────────────────────────────
   update-readme:
     name: AI Ops - Update README
@@ -106,21 +106,21 @@ jobs:
       contents: write
 
     steps:
-      - uses: actions/checkout@v4
+
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
       - name: Generate CI Report
         run: |
-          cat <<EOF > report.md
-## ✨ Release Summary
-
-- Build: ${{ needs.build-test.outputs.test_result }}
-- Docker: Pushed successfully
-- Image: ${{ needs.docker.outputs.image_url }}
-- Version: v1.0.${GITHUB_RUN_NUMBER}
-- Commit: ${GITHUB_SHA::7}
-
-🚀 System is healthy and production ready
-EOF
+          echo "## ✨ Release Summary" > report.md
+          echo "" >> report.md
+          echo "- Build: ${{ needs.build-test.outputs.test_result }}" >> report.md
+          echo "- Docker: Pushed successfully" >> report.md
+          echo "- Image: ${{ needs.docker.outputs.image_url }}" >> report.md
+          echo "- Version: v1.0.${{ github.run_number }}" >> report.md
+          echo "- Commit: ${GITHUB_SHA::7}" >> report.md
+          echo "" >> report.md
+          echo "🚀 System is healthy and production ready" >> report.md
 
       - name: Append to README
         run: |
