@@ -49,7 +49,7 @@ jobs:
     steps:
       - name: Deploy App
         run: |
-          echo "IMAGE: ${{ needs.docker.outputs.image_url }}"
+          echo "IMAGE: v1.0.${{ github.run_number }}-${{ github.sha }}"
           echo "Deploying..."
           echo "Health check passed"
 
@@ -90,7 +90,7 @@ jobs:
       - name: Create file
         run: |
           echo "STATUS=SUCCESS" > docker-status.txt
-          echo "IMAGE=${{ needs.docker.outputs.image_url }}" >> docker-status.txt
+          echo "IMAGE=v1.0.${GITHUB_RUN_NUMBER}-${GITHUB_SHA::7}" >> docker-status.txt
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -100,7 +100,7 @@ jobs:
 
 
 # ─────────────────────────────
-# 6. README AUTO UPDATE (FIXED + CLEAN)
+# 6. README UPDATE (STABLE + NO ERRORS)
 # ─────────────────────────────
   update-readme:
     name: AI Release Notes
@@ -120,7 +120,7 @@ jobs:
           echo "" >> release.md
           echo "- Build: ${{ needs.build-test.result }}" >> release.md
           echo "- Docker: Success" >> release.md
-          echo "- Image: ${{ needs.docker.outputs.image_url }}" >> release.md
+          echo "- Image: v1.0.${GITHUB_RUN_NUMBER}-${SHORT_SHA}" >> release.md
           echo "- Version: v1.0.${GITHUB_RUN_NUMBER}" >> release.md
           echo "- Commit: $SHORT_SHA" >> release.md
           echo "" >> release.md
@@ -144,9 +144,7 @@ jobs:
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
-          
           git add README.md
           git commit -m "docs: update release notes" || exit 0
-
           git pull --rebase origin main || true
           git push origin HEAD:main
