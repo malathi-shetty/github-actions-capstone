@@ -20,9 +20,9 @@ Node.js app with full CI/CD + security pipeline.
 
 - Build: success
 - Docker: Success
-- Image: v1.0.42
-- Version: v1.0.42
-- Commit: 370b7ef
+- Image: 
+- Version: v1.0.45
+- Commit: ed6b952
 
 ## 🔐 Security
 - Trivy Scan: CRITICAL/HIGH enforced
