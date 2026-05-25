@@ -119,7 +119,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Generate Report
+      - name: Generate Release Notes
         run: |
           SHORT_SHA=$(echo $GITHUB_SHA | cut -c1-7)
 
@@ -127,8 +127,8 @@ jobs:
           echo "" >> release.md
           echo "- Build: ${{ needs.build-test.result }}" >> release.md
           echo "- Docker: Success" >> release.md
-          echo "- Image: v1.0.${{ github.run_number }}" >> release.md
-          echo "- Version: v1.0.${{ github.run_number }}" >> release.md
+          echo "- Image: ${{ needs.docker.outputs.image_url }}" >> release.md
+          echo "- Version: v1.0.${GITHUB_RUN_NUMBER}" >> release.md
           echo "- Commit: $SHORT_SHA" >> release.md
           echo "" >> release.md
           echo "## 🔐 Security" >> release.md
@@ -139,18 +139,27 @@ jobs:
           echo "" >> release.md
           echo "🚀 System is production ready" >> release.md
 
-      - name: Replace README Section
+      - name: Replace CI section in README (CLEAN)
         run: |
           awk '
-          /<!-- CI-REPORT-START -->/ {print; system("cat release.md"); skip=1; next}
-          /<!-- CI-REPORT-END -->/ {skip=0}
+          /<!-- CI-REPORT-START -->/ {
+            print
+            system("cat release.md")
+            skip=1
+            next
+          }
+          /<!-- CI-REPORT-END -->/ {
+            skip=0
+            print
+            next
+          }
           !skip
-          ' README.md > tmp && mv tmp README.md
+          ' README.md > README.tmp && mv README.tmp README.md
 
       - name: Commit README
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
           git add README.md
-          git commit -m "docs: auto update release notes" || echo "no changes"
+          git commit -m "docs: clean CI/CD update" || echo "no changes"
           git push
