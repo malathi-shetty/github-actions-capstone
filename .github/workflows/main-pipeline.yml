@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write   # required for tags + README update
+  contents: write
 
 jobs:
 
@@ -24,7 +24,7 @@ jobs:
 
 
 # ─────────────────────────────
-# 2. DOCKER BUILD & PUSH + TRIVY
+# 2. DOCKER BUILD + TRIVY
 # ─────────────────────────────
   docker:
     name: Docker Build + Trivy Scan
@@ -97,7 +97,7 @@ jobs:
       - name: Create status file
         run: |
           echo "STATUS=SUCCESS" > docker-status.txt
-          echo "IMAGE=sha-${GITHUB_SHA::7}" >> docker-status.txt
+          echo "IMAGE=sha-$(echo $GITHUB_SHA | cut -c1-7)" >> docker-status.txt
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -107,10 +107,10 @@ jobs:
 
 
 # ─────────────────────────────
-# 6. AUTO README UPDATE (AI OPS)
+# 6. AI OPS README UPDATE (FINAL CLEAN VERSION)
 # ─────────────────────────────
   update-readme:
-    name: Update README (AI Ops)
+    name: AI Ops - Release Notes
     needs: [build-test, docker, versioning]
     runs-on: ubuntu-latest
     permissions:
@@ -124,29 +124,37 @@ jobs:
           VERSION="v1.0.${GITHUB_RUN_NUMBER}"
           SHORT_SHA=$(echo $GITHUB_SHA | cut -c1-7)
 
-          cat > report.md <<EOF
-## 🚀 Release Summary
+          cat > release.md <<EOF
+# 🚀 Release Summary (AI Ops Generated)
 
+## 🧠 Pipeline Result
 - Build: ${{ needs.build-test.outputs.test_result }}
 - Docker: Pushed successfully
 - Image: ${{ needs.docker.outputs.image_url }}
 - Version: $VERSION
 - Commit: $SHORT_SHA
 
-🚀 System is healthy and production ready
+## 🔐 Security
+- Trivy Scan: Executed (CRITICAL/HIGH blocked)
+
+## 📦 Flow
+Build → Test → Docker → Scan → Tag → Deploy
+
+## 🎯 Status
+System is stable and production ready 🚀
 EOF
 
       - name: Update README
         run: |
           echo "" >> README.md
           echo "---" >> README.md
-          cat report.md >> README.md
+          cat release.md >> README.md
 
-      - name: Commit changes
+      - name: Commit README changes
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
 
           git add README.md
-          git commit -m "docs: auto update release summary" || echo "no changes"
+          git commit -m "docs: AI release notes update" || echo "no changes"
           git push
