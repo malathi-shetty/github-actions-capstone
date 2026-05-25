@@ -52,7 +52,7 @@ jobs:
       - name: Write Docker status
         run: |
           echo "STATUS=SUCCESS" > docker-status.txt
-          echo "IMAGE=${{ needs.docker.outputs.image_url }}" >> docker-status.txt
+          echo "IMAGE=sha-${GITHUB_SHA::7}" >> docker-status.txt
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -66,19 +66,26 @@ jobs:
   # ─────────────────────────────
   deploy:
     name: Deploy to Production
-    needs:
-      - build-test
-      - docker
+    needs: [build-test, docker]
 
     runs-on: ubuntu-latest
 
     environment:
       name: production
 
+    env:
+      IMAGE: ${{ needs.docker.outputs.image_url }}
+      RESULT: ${{ needs.build-test.outputs.test_result }}
+
     steps:
+
       - name: Deploy application
         run: |
-          echo "Deploying image: ${{ needs.docker.outputs.image_url }} to production"
+          echo "Deploying image: $IMAGE to production"
+          echo "Pulling image..."
+          echo "Starting container..."
+          echo "Health check..."
+          echo "DONE"
 
       - name: Deployment summary
         run: |
@@ -90,7 +97,7 @@ jobs:
 
           echo "| Environment | production |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Triggered by | ${{ github.actor }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Image | \`${{ needs.docker.outputs.image_url }}\` |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Build & Test | ✅ ${{ needs.build-test.outputs.test_result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Commit | \`$(echo "${{ github.sha }}" | cut -c1-7)\` |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Status | ✅ Deploy simulated |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Image | \`$IMAGE\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Build & Test | $RESULT |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Commit | \`$(echo "${GITHUB_SHA}" | cut -c1-7)\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Status | Deploy simulated |" >> "$GITHUB_STEP_SUMMARY"
