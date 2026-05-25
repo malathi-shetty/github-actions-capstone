@@ -7,13 +7,16 @@ on:
       image_name:
         required: true
         type: string
+
       tag:
         required: true
         type: string
+
       sha_tag:
         required: false
         type: string
         default: ""
+
       push:
         required: false
         type: boolean
@@ -27,12 +30,8 @@ on:
 
     outputs:
       image_url:
-        description: "Docker image"
+        description: "Docker image full URL"
         value: ${{ jobs.docker.outputs.image_url }}
-
-      image_digest:
-        description: "Docker digest"
-        value: ${{ jobs.docker.outputs.image_digest }}
 
 jobs:
   docker:
@@ -40,7 +39,6 @@ jobs:
 
     outputs:
       image_url: ${{ steps.meta.outputs.image_url }}
-      image_digest: ${{ steps.digest.outputs.digest }}
 
     steps:
       - uses: actions/checkout@v4
@@ -54,26 +52,31 @@ jobs:
           username: ${{ secrets.docker_username }}
           password: ${{ secrets.docker_token }}
 
-      - name: Build & Push
-        id: build
+      - name: Build tags
+        id: tags
+        run: |
+          TAGS="${{ inputs.image_name }}:${{ inputs.tag }}"
+
+          if [ -n "${{ inputs.sha_tag }}" ]; then
+            TAGS="${TAGS},${{ inputs.image_name }}:${{ inputs.sha_tag }}"
+          fi
+
+          echo "tags=$TAGS" >> "$GITHUB_OUTPUT"
+
+      - name: Build & Push Image
         uses: docker/build-push-action@v5
         with:
           context: .
           push: ${{ inputs.push }}
-          tags: ${{ inputs.image_name }}:${{ inputs.tag }}
+          tags: ${{ steps.tags.outputs.tags }}
 
       - name: Set Image Output
         id: meta
         run: |
-          echo "image_url=${{ inputs.image_name }}:${{ inputs.tag }}" >> $GITHUB_OUTPUT
+          IMAGE="${{ inputs.image_name }}:${{ inputs.tag }}"
+          echo "image_url=$IMAGE" >> "$GITHUB_OUTPUT"
 
-      - name: Get Digest
-        id: digest
-        run: |
-          DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' ${{ inputs.image_name }}:${{ inputs.tag }} || echo "unknown")
-          echo "digest=$DIGEST" >> $GITHUB_OUTPUT
-
-      - name: Trivy Scan
+      - name: Trivy Scan (CRITICAL BLOCK)
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: ${{ inputs.image_name }}:${{ inputs.tag }}
@@ -82,7 +85,8 @@ jobs:
           severity: CRITICAL,HIGH
           exit-code: 1
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload Scan Report
+        uses: actions/upload-artifact@v4
         with:
           name: trivy-report
           path: trivy.sarif
