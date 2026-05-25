@@ -16,21 +16,38 @@ Node.js app with full CI/CD + security pipeline.
 ## 📊 CI/CD Dashboard
 
 <!-- CI-REPORT-START -->
-## 🚀 Release Summary
+
+## 🚀 Release Summary (AI DevSecOps Report)
 
 - Build: success
-- Docker: Success
-- Image: 
-- Version: v1.0.50
+- Docker: success
+- Image: shettymalathi113/github-actions-capstone:v1.0.50
+- Tag: v1.0.50
 - Commit: 15e0d82
 
-## 🔐 Security
-- Trivy Scan: CRITICAL/HIGH enforced
+---
 
-## 📦 Flow
-Build → Test → Docker → Scan → Tag → Deploy
+## 🔐 Security Scan (Trivy)
+- Status: CRITICAL/HIGH enforced
+- Mode: Fail-on-critical enabled
+- Report: uploaded as artifact
 
-🚀 System is production ready
+---
+
+## 🐳 Docker Image
+- Repo: github-actions-capstone
+- Image: shettymalathi113/github-actions-capstone:v1.0.50
+- Commit SHA: 15e0d82
+
+---
+
+## 📦 Pipeline Flow
+GitHub Push → Build → Test → Docker → Trivy Scan → Tag → Deploy → README Update
+
+---
+
+## 🚀 System Status
+Production Ready ✅
 <!-- CI-REPORT-END -->
 
 ---
@@ -52,6 +69,25 @@ Build → Test → Docker → Scan → Tag → Deploy
 
 ---
 
-## 🧩 CI/CD Architecture
 
-GitHub Push → Build → Test → Trivy → Docker → Tag → Deploy
+
+## 🧱 CI/CD Architecture (Visual Flow)
+
+```text
+Developer Push
+      ↓
+GitHub Actions Trigger
+      ↓
+Build & Test
+      ↓
+Docker Build
+      ↓
+Trivy Security Scan (BLOCK CRITICAL)
+      ↓
+Push to Docker Hub
+      ↓
+Git Tag Release
+      ↓
+Deploy
+      ↓
+README Auto Update
