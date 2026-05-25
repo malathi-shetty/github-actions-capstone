@@ -35,7 +35,7 @@ on:
 
     outputs:
       image_url:
-        description: Full image URL
+        description: Full Docker image URL
         value: ${{ jobs.docker.outputs.image_url }}
 
 jobs:
@@ -67,7 +67,7 @@ jobs:
           username: ${{ secrets.docker_username }}
           password: ${{ secrets.docker_token }}
 
-      # Build dynamic tag list
+      # Build Docker tag list
       - name: Build tag list
         id: tags
         run: |
@@ -103,24 +103,21 @@ jobs:
 
       # Trivy vulnerability scan
       - name: Scan image with Trivy
-        uses: aquasecurity/trivy-action@0.20.0
+        uses: aquasecurity/trivy-action@master
         with:
           image-ref: '${{ inputs.image_name }}:${{ inputs.tag }}'
-          format: 'table'
-          exit-code: '1'
-          ignore-unfixed: true
-          vuln-type: 'os,library'
-          severity: 'CRITICAL'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
         continue-on-error: true
 
-      # Upload scan report
-      - name: Upload Trivy report
+      # Upload Trivy scan report
+      - name: Upload Trivy scan report
         uses: actions/upload-artifact@v4
         with:
           name: trivy-report-${{ github.run_number }}
           path: trivy-results.sarif
           retention-days: 14
-        continue-on-error: true
 
       # Workflow summary
       - name: Docker summary
