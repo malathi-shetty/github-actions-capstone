@@ -1,0 +1,25 @@
+{
+  "name": "github-actions-capstone",
+  "version": "1.0.0",
+  "description": "Production-style CI/CD pipeline using GitHub Actions",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node tests/test.js"
+  },
+  "keywords": [
+    "nodejs",
+    "express",
+    "docker",
+    "github-actions",
+    "ci-cd"
+  ],
+  "author": "malathi",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^5.2.1"
+  }
+}
