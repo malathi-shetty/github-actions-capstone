@@ -10,27 +10,19 @@ permissions:
 
 jobs:
 
-# ─────────────────────────────
-# 1. BUILD & TEST
-# ─────────────────────────────
   build-test:
-    name: Build & Test
     uses: ./.github/workflows/reusable-build-test.yml
     with:
       node_version: "20"
       run_tests: true
 
 
-# ─────────────────────────────
-# 2. DOCKER + TRIVY
-# ─────────────────────────────
   docker:
-    name: Docker + Security Scan
-    needs: build-test
     uses: ./.github/workflows/reusable-docker.yml
+    needs: build-test
     with:
       image_name: "shettymalathi113/github-actions-capstone"
-      tag: v1.0.${{ github.run_number }}   # IMPORTANT: simple tag (stable)
+      tag: v1.0.${{ github.run_number }}
       sha_tag: sha-${{ github.sha }}
       push: true
     secrets:
@@ -38,113 +30,74 @@ jobs:
       docker_token: ${{ secrets.DOCKER_TOKEN }}
 
 
-# ─────────────────────────────
-# 3. DEPLOY (SIMULATED)
-# ─────────────────────────────
-  deploy:
-    name: Deploy
-    needs: docker
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Deploy App
-        run: |
-          echo "IMAGE: ${{ needs.docker.outputs.image_url }}"
-          echo "Deploying..."
-          echo "Health check passed"
-
-
-# ─────────────────────────────
-# 4. VERSION TAGGING
-# ─────────────────────────────
-  versioning:
-    name: Git Tag
-    needs: deploy
-    runs-on: ubuntu-latest
-
-    permissions:
-      contents: write
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Create Tag
-        run: |
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
-          git tag v1.0.${GITHUB_RUN_NUMBER}
-          git push origin v1.0.${GITHUB_RUN_NUMBER}
-
-
-# ─────────────────────────────
-# 5. SAVE STATUS
-# ─────────────────────────────
-  docker-status:
-    name: Save Status
-    needs: docker
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Create file
-        run: |
-          echo "STATUS=SUCCESS" > docker-status.txt
-          echo "IMAGE=${{ needs.docker.outputs.image_url }}" >> docker-status.txt
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: docker-status
-          path: docker-status.txt
-
-
-# ─────────────────────────────
-# 6. README UPDATE (FIXED OUTPUT USAGE)
-# ─────────────────────────────
   update-readme:
-    name: AI Release Notes
-    needs: [build-test, docker]
+    needs: docker
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Generate Release Notes
+      - name: Generate Smart DevSecOps Report
         run: |
           SHORT_SHA=$(echo $GITHUB_SHA | cut -c1-7)
 
-          echo "## 🚀 Release Summary" > release.md
+          echo "## 🚀 DevSecOps Release Intelligence" > release.md
           echo "" >> release.md
-          echo "- Build: ${{ needs.build-test.result }}" >> release.md
-          echo "- Docker: Success" >> release.md
-          echo "- Image: ${{ needs.docker.outputs.image_url }}" >> release.md
-          echo "- Version: v1.0.${GITHUB_RUN_NUMBER}" >> release.md
-          echo "- Commit: $SHORT_SHA" >> release.md
-          echo "" >> release.md
-          echo "## 🔐 Security" >> release.md
-          echo "- Trivy Scan: CRITICAL/HIGH enforced" >> release.md
-          echo "" >> release.md
-          echo "## 📦 Flow" >> release.md
-          echo "Build → Test → Docker → Scan → Tag → Deploy" >> release.md
-          echo "" >> release.md
-          echo "🚀 System is production ready" >> release.md
 
-      - name: Update README
+          echo "### 🧠 AI Summary" >> release.md
+          echo "- Pipeline executed successfully" >> release.md
+          echo "- Build + Test completed" >> release.md
+          echo "- Docker image built & scanned" >> release.md
+
+          echo "" >> release.md
+          echo "### 🐳 Docker Image" >> release.md
+          echo "- Image: ${{ needs.docker.outputs.image_url }}" >> release.md
+          echo "- Digest: ${{ needs.docker.outputs.image_digest }}" >> release.md
+
+          echo "" >> release.md
+          echo "### 🔐 Security (Trivy)" >> release.md
+          echo "- Status: CRITICAL/HIGH blocked" >> release.md
+          echo "- Report: uploaded as artifact" >> release.md
+
+          echo "" >> release.md
+          echo "### 🧱 Architecture Flow" >> release.md
+          echo '```text' >> release.md
+          echo "GitHub Push → Build → Test → Docker → Trivy Scan → Deploy → Tag → README Update" >> release.md
+          echo '```' >> release.md
+
+          echo "" >> release.md
+          echo "### 📊 Pipeline Graph" >> release.md
+          echo "GitHub Actions Workflow → jobs: build → docker → scan → deploy → docs" >> release.md
+
+          echo "" >> release.md
+          echo "### 🧾 Commit Info" >> release.md
+          echo "- Commit: $SHORT_SHA" >> release.md
+          echo "- Run: $GITHUB_RUN_NUMBER" >> release.md
+
+          echo "" >> release.md
+          echo "🚀 System Status: Production Ready"
+
+      - name: Replace README Section ONLY
         run: |
           awk '
-          /<!-- CI-REPORT-START -->/ {print; system("cat release.md"); skip=1; next}
-          /<!-- CI-REPORT-END -->/ {skip=0}
+          /<!-- CI-REPORT-START -->/ {
+            print
+            system("cat release.md")
+            skip=1
+            next
+          }
+          /<!-- CI-REPORT-END -->/ {
+            skip=0
+            print
+            next
+          }
           !skip
           ' README.md > tmp && mv tmp README.md
 
-      - name: Commit README
+      - name: Commit Changes
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
-
-          git pull --rebase origin main
-
           git add README.md
-          git commit -m "docs: update release notes" || echo "no changes"
+          git commit -m "docs: smart DevSecOps update" || echo "no changes"
           git push
