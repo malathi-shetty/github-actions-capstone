@@ -7,14 +7,9 @@ on:
 
   workflow_dispatch:
 
-env:
-  IMAGE_NAME: ${{ secrets.DOCKER_USERNAME }}/github-actions-capstone
-
 jobs:
 
-  # ─────────────────────────────────────────────────────────────
-  # Job 1 — Build and Test
-  # ─────────────────────────────────────────────────────────────
+  # Job 1 — Build & Test
   build-test:
 
     name: Build & Test
@@ -26,10 +21,7 @@ jobs:
       run_tests: true
 
 
-  # ─────────────────────────────────────────────────────────────
   # Job 2 — Docker Build & Push
-  # Runs only if build-test succeeds
-  # ─────────────────────────────────────────────────────────────
   docker:
 
     name: Docker Build & Push
@@ -39,7 +31,7 @@ jobs:
     uses: ./.github/workflows/reusable-docker.yml
 
     with:
-      image_name: ${{ secrets.DOCKER_USERNAME }}/github-actions-capstone
+      image_name: "shettymalathi113/github-actions-capstone"
       tag: latest
       sha_tag: sha-${{ github.sha }}
       push: true
@@ -49,10 +41,7 @@ jobs:
       docker_token: ${{ secrets.DOCKER_TOKEN }}
 
 
-  # ─────────────────────────────────────────────────────────────
   # Job 3 — Deploy
-  # Runs only if Docker build succeeds
-  # ─────────────────────────────────────────────────────────────
   deploy:
 
     name: Deploy to Production
@@ -66,27 +55,12 @@ jobs:
     environment:
       name: production
 
-    env:
-      IMAGE_URL: ${{ needs.docker.outputs.image_url }}
-      TEST_RESULT: ${{ needs.build-test.outputs.test_result }}
-      SHORT_SHA: ${{ github.sha }}
-
     steps:
 
-      # Simulated deployment
       - name: Deploy application
         run: |
-          echo "Deploying image: $IMAGE_URL to production"
-          echo ""
-          echo "Deployment steps:"
-          echo "  1. Pull image: $IMAGE_URL"
-          echo "  2. Stop existing container"
-          echo "  3. Start updated container"
-          echo "  4. Run health checks"
-          echo ""
-          echo "✅ Deployment to production complete"
+          echo "Deploying image: ${{ needs.docker.outputs.image_url }} to production"
 
-      # GitHub Actions summary
       - name: Deployment summary
         run: |
           echo "## Production Deployment" >> "$GITHUB_STEP_SUMMARY"
@@ -97,7 +71,7 @@ jobs:
 
           echo "| Environment | production |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Triggered by | ${{ github.actor }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Image | \`$IMAGE_URL\` |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Build & Test | ✅ $TEST_RESULT |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Commit | \`$(echo "$SHORT_SHA" | cut -c1-7)\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Image | \`${{ needs.docker.outputs.image_url }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Build & Test | ✅ ${{ needs.build-test.outputs.test_result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Commit | \`$(echo "${{ github.sha }}" | cut -c1-7)\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Status | ✅ Deploy simulated |" >> "$GITHUB_STEP_SUMMARY"
