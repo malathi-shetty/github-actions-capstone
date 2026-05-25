@@ -12,5 +12,3 @@
 ![Docker Image Version](https://img.shields.io/docker/v/shettymalathi113/github-actions-capstone?sort=semver)
 ![Docker Version](https://img.shields.io/github/v/tag/shettymalathi113/github-actions-capstone)
 
-![Main Pipeline](https://github.com/shettymalathi113/github-actions-capstone/actions/workflows/main-pipeline.yml/badge.svg)
-![Deploy Status](https://github.com/shettymalathi113/github-actions-capstone/actions/workflows/main-pipeline.yml/badge.svg)
