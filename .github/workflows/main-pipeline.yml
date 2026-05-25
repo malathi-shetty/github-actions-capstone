@@ -9,23 +9,22 @@ on:
 
 jobs:
 
+  # ─────────────────────────────
   # Job 1 — Build & Test
+  # ─────────────────────────────
   build-test:
-
     name: Build & Test
-
     uses: ./.github/workflows/reusable-build-test.yml
-
     with:
       node_version: "20"
       run_tests: true
 
 
+  # ─────────────────────────────
   # Job 2 — Docker Build & Push
+  # ─────────────────────────────
   docker:
-
     name: Docker Build & Push
-
     needs: build-test
 
     uses: ./.github/workflows/reusable-docker.yml
@@ -41,11 +40,32 @@ jobs:
       docker_token: ${{ secrets.DOCKER_TOKEN }}
 
 
-  # Job 3 — Deploy
+  # ─────────────────────────────
+  # Job 3 — Docker Status Artifact
+  # ─────────────────────────────
+  docker-status:
+    name: Save Docker Status
+    needs: docker
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Write Docker status
+        run: |
+          echo "STATUS=SUCCESS" > docker-status.txt
+          echo "IMAGE=${{ needs.docker.outputs.image_url }}" >> docker-status.txt
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-status
+          path: docker-status.txt
+
+
+  # ─────────────────────────────
+  # Job 4 — Deploy
+  # ─────────────────────────────
   deploy:
-
     name: Deploy to Production
-
     needs:
       - build-test
       - docker
@@ -56,7 +76,6 @@ jobs:
       name: production
 
     steps:
-
       - name: Deploy application
         run: |
           echo "Deploying image: ${{ needs.docker.outputs.image_url }} to production"
