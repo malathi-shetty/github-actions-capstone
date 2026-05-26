@@ -30,6 +30,7 @@ on:
 
     outputs:
       image_url:
+        description: "Docker image full URL"
         value: ${{ jobs.docker.outputs.image_url }}
 
 jobs:
@@ -58,7 +59,7 @@ jobs:
           TAGS="${{ inputs.image_name }}:${{ inputs.tag }}"
 
           if [ -n "${{ inputs.sha_tag }}" ]; then
-            TAGS="$TAGS,${{ inputs.image_name }}:${{ inputs.sha_tag }}"
+            TAGS="${TAGS},${{ inputs.image_name }}:${{ inputs.sha_tag }}"
           fi
 
           echo "tags=$TAGS" >> "$GITHUB_OUTPUT"
@@ -70,7 +71,7 @@ jobs:
           push: ${{ inputs.push }}
           tags: ${{ steps.tags.outputs.tags }}
 
-      - name: Set Output Image
+      - name: Set Image Output
         id: meta
         run: |
           echo "image_url=${{ inputs.image_name }}:${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
