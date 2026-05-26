@@ -38,16 +38,45 @@ Build → Test → Docker → Scan → Tag → Deploy
 ## 🚀 CI/CD Pipeline Status
 
 ### 🔄 Workflows
-![PR](https://github.com/malathi-shetty/github-actions-capstone/actions/workflows/pr-pipeline.yml/badge.svg)
-![Main](https://github.com/malathi-shetty/github-actions-capstone/actions/workflows/main-pipeline.yml/badge.svg)
-![Docker](https://github.com/malathi-shetty/github-actions-capstone/actions/workflows/reusable-docker.yml/badge.svg)
-![Health](https://github.com/malathi-shetty/github-actions-capstone/actions/workflows/health-check.yml/badge.svg)
+
+<p>
+<span>PR Pipeline</span>  <br>
+  <a href="https://github.com/malathi-shetty/github-actions-capstone/actions/workflows/pr-pipeline.yml">
+    <img src="https://github.com/malathi-shetty/github-actions-capstone/actions/workflows/pr-pipeline.yml/badge.svg" alt="PR Pipeline">
+  </a>
+
+  <br>
+<span>Main Pipeline</span>  <br>
+  <a href="https://github.com/malathi-shetty/github-actions-capstone/actions/workflows/main-pipeline.yml">
+    <img src="https://github.com/malathi-shetty/github-actions-capstone/actions/workflows/main-pipeline.yml/badge.svg" alt="Main Pipeline">
+  </a>
+
+<span>Health Check</span>
+
+  <a href="https://github.com/malathi-shetty/github-actions-capstone/actions/workflows/health-check.yml">
+    <img src="https://github.com/malathi-shetty/github-actions-capstone/actions/workflows/health-check.yml/badge.svg" alt="Health Check">
+  </a>
+
+</p>
 
 ---
 
 ### 🐳 Docker Metrics
-![Pulls](https://img.shields.io/docker/pulls/shettymalathi113/github-actions-capstone)
-![Size](https://img.shields.io/docker/image-size/shettymalathi113/github-actions-capstone/latest)
+
+<p>
+<span>Docker Pulls</span>
+    <br>
+  <a href="https://hub.docker.com/repository/docker/shettymalathi113/github-actions-capstone">
+    <img src="https://img.shields.io/docker/pulls/shettymalathi113/github-actions-capstone" alt="Docker Pulls">
+  </a>
+
+<br>
+<span>Docker Image Size</span>  <br>
+  <a href="https://hub.docker.com/repository/docker/shettymalathi113/github-actions-capstone">
+    <img src="https://img.shields.io/docker/image-size/shettymalathi113/github-actions-capstone/latest" alt="Docker Image Size">
+  </a>
+
+</p>
 
 ---
 
@@ -58,6 +87,8 @@ Build → Test → Docker → Scan → Tag → Deploy
 
 | Severity | Package | Vulnerability | Installed Version | Fixed Version |
 |---|---|---|---|---|
+
+_No HIGH or CRITICAL vulnerabilities detected ✅_
 
 <!-- TRIVY-TABLE-END -->
 
