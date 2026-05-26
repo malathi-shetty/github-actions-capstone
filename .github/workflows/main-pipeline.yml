@@ -5,7 +5,84 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:name: Main Pipeline
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
 permissions:
+  contents: write
+
+jobs:
+
+  build-test:
+    uses: ./.github/workflows/reusable-build-test.yml
+    with:
+      node_version: "20"
+      run_tests: true
+
+  docker:
+    needs: build-test
+    uses: ./.github/workflows/reusable-docker.yml
+    with:
+      image_name: "shettymalathi113/github-actions-capstone"
+      tag: v1.0.${{ github.run_number }}-${{ github.sha }}
+      sha_tag: sha-${{ github.sha }}
+      push: true
+    secrets:
+      docker_username: ${{ secrets.DOCKER_USERNAME }}
+      docker_token: ${{ secrets.DOCKER_TOKEN }}
+
+  # ─────────────────────────────
+  # 🛡️ TRIVY SCAN (FIXED HERE)
+  # ─────────────────────────────
+  trivy:
+    needs: docker
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Install Trivy
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget
+          wget https://github.com/aquasecurity/trivy/releases/latest/download/trivy_0.70.0_Linux-64bit.deb
+          sudo dpkg -i trivy_0.70.0_Linux-64bit.deb
+
+      - name: Run Trivy Scan
+        run: |
+          IMAGE="shettymalathi113/github-actions-capstone:v1.0.${{ github.run_number }}-${{ github.sha }}"
+
+          trivy image \
+            --format table \
+            --severity CRITICAL,HIGH \
+            $IMAGE
+
+  deploy:
+    needs: trivy
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Deploying app..."
+
+  ai-release:
+    needs: trivy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate AI Notes File
+        run: |
+          echo "## 🤖 AI Release Notes" > ai.md
+          echo "Pipeline completed successfully" >> ai.md
+
+      - name: Update README
+        run: |
+          awk '
+          /<!-- AI-START -->/ {print; system("cat ai.md"); skip=1; next}
+          /<!-- AI-END -->/ {skip=0}
+          !skip
+          ' README.md > tmp && mv tmp README.md
   contents: write
 
 jobs:
