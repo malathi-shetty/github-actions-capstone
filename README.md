@@ -1,4 +1,3 @@
-
 # 🚀 DevSecOps CI/CD Pipeline
 
 ## 📌 Project Overview
@@ -66,30 +65,21 @@ flowchart TD
     G --> H[Deploy]
     H --> I[README Auto Update]
 ```
-
-----
-
-- name: Inject Trivy Table into README
-  run: |
-    if [ -f trivy.md ]; then
-      awk '
-      /<!-- TRIVY-TABLE-START -->/ {print; system("cat trivy.md"); skip=1; next}
-      /<!-- TRIVY-TABLE-END -->/ {skip=0}
-      !skip
-      ' README.md > tmp && mv tmp README.md
-    fi
-
 ## 🔐 Vulnerability Report (Trivy)
 
 <!-- TRIVY-TABLE-START -->
-_No scan data yet_
+
+No scan data yet
+
 <!-- TRIVY-TABLE-END -->
+
+This section is automatically updated by CI/CD pipeline using Trivy scan results.
 
 ---
 
 ## 🤖 AI Release Notes
 
-> Automatically generated using OpenAI during CI/CD execution
+Automatically generated using OpenAI during CI/CD execution
 
 - Pipeline Summary: AI-generated per build
 - Commit: Dynamic per run
@@ -98,12 +88,11 @@ _No scan data yet_
 - Status: Production-ready deployment
 
 <!-- AI-START -->
+
 Automatically generated during CI/CD pipeline.
 
-- Uses OpenAI GPT model
-- Summarizes build, docker, security, deployment
-- Updated on every release
+Uses OpenAI GPT model  
+Summarizes build, docker, security, deployment  
+Updated on every release  
+
 <!-- AI-END -->
-
-
-
