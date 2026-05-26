@@ -30,6 +30,7 @@ on:
 
     outputs:
       image_url:
+        description: "Docker image full URL"
         value: ${{ jobs.docker.outputs.image_url }}
 
 jobs:
@@ -44,6 +45,14 @@ jobs:
 
       - name: Setup Buildx
         uses: docker/setup-buildx-action@v3
+
+      # ✅ INSTALL TRIVY (FIXED ERROR)
+      - name: Install Trivy
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget
+          wget https://github.com/aquasecurity/trivy/releases/latest/download/trivy_0.50.1_Linux-64bit.deb
+          sudo dpkg -i trivy_0.50.1_Linux-64bit.deb
 
       - name: Login Docker Hub
         if: inputs.push == true
@@ -75,3 +84,20 @@ jobs:
         run: |
           IMAGE="${{ inputs.image_name }}:${{ inputs.tag }}"
           echo "image_url=$IMAGE" >> "$GITHUB_OUTPUT"
+
+      # ─────────────────────────────
+      # TRIVY SCAN (NOW WORKS)
+      # ─────────────────────────────
+      - name: Trivy Scan
+        run: |
+          trivy image \
+            --format json \
+            --output trivy.json \
+            --severity CRITICAL,HIGH \
+            ${{ inputs.image_name }}:${{ inputs.tag }}
+
+      - name: Upload Trivy Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-report
+          path: trivy.json
