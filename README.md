@@ -88,7 +88,7 @@ Automatically generated using OpenAI during CI/CD execution
 - Status: Production-ready deployment
 
 <!-- AI-START -->
-## 🤖 AI Release Notes
+## 🤖 AI Notes
 
 null
 <!-- AI-END -->
