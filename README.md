@@ -68,9 +68,11 @@ flowchart TD
 ## 🔐 Vulnerability Report (Trivy)
 
 <!-- TRIVY-TABLE-START -->
+## 🔐 Vulnerability Report (Trivy)
 
-No scan data yet
-
+| Severity | Package | Vulnerability | Status |
+|----------|---------|---------------|--------|
+| No scan data yet | - | - | - |
 <!-- TRIVY-TABLE-END -->
 
 This section is automatically updated by CI/CD pipeline using Trivy scan results.
@@ -90,5 +92,5 @@ Automatically generated using OpenAI during CI/CD execution
 <!-- AI-START -->
 ## 🤖 AI Notes
 
-null
+AI release notes unavailable
 <!-- AI-END -->
