@@ -80,7 +80,11 @@ flowchart TD
 - Status: Production-ready deployment
 
 <!-- AI-START -->
-AUTO-INJECTED CONTENT HERE
+Automatically generated during CI/CD pipeline.
+
+- Uses OpenAI GPT model
+- Summarizes build, docker, security, deployment
+- Updated on every release
 <!-- AI-END -->
 
 
