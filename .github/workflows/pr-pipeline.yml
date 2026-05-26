@@ -9,10 +9,15 @@ on:
       - opened
       - synchronize
 
+permissions:
+  contents: read
+
 jobs:
 
-  # Build and test only
-  # No Docker build/push on PRs
+  # =========================================
+  # BUILD + TEST
+  # =========================================
+
   build-test:
 
     name: Run Build & Test Workflow
@@ -22,12 +27,15 @@ jobs:
     with:
       node_version: "20"
       run_tests: true
-      #run_tests: false # to check skip test
+      # run_tests: false
 
-  # PR summary job
-  pr-comment:
+  # =========================================
+  # DEPENDENCY REVIEW
+  # =========================================
 
-    name: PR Summary
+  dependency-review:
+
+    name: Dependency Vulnerability Check
 
     needs: build-test
 
@@ -35,14 +43,38 @@ jobs:
 
     steps:
 
-      # Print message in logs
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Check Dependencies for Vulnerabilities
+        uses: actions/dependency-review-action@v4
+
+        with:
+          fail-on-severity: critical
+
+  # =========================================
+  # PR SUMMARY
+  # =========================================
+
+  pr-comment:
+
+    name: PR Summary
+
+    needs:
+      - build-test
+      - dependency-review
+
+    runs-on: ubuntu-latest
+
+    steps:
+
       - name: Print PR success message
         run: |
           echo "PR checks passed for branch: ${{ github.head_ref }}"
 
-      # Add GitHub Actions summary
       - name: Add workflow summary
         run: |
+
           echo "## PR Pipeline Summary" >> "$GITHUB_STEP_SUMMARY"
 
           echo "" >> "$GITHUB_STEP_SUMMARY"
@@ -55,6 +87,8 @@ jobs:
           echo "| PR Number | \`#${{ github.event.pull_request.number }}\` |" >> "$GITHUB_STEP_SUMMARY"
 
           echo "| Test Result | \`${{ needs.build-test.outputs.test_result }}\` |" >> "$GITHUB_STEP_SUMMARY"
+
+          echo "| Dependency Review | ✅ Completed |" >> "$GITHUB_STEP_SUMMARY"
 
           echo "| Docker Build | ❌ Skipped on PRs |" >> "$GITHUB_STEP_SUMMARY"
 
