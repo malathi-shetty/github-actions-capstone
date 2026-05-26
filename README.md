@@ -90,7 +90,7 @@ Automatically generated using OpenAI during CI/CD execution
 - Status: Production-ready deployment
 
 <!-- AI-START -->
-## 🤖 AI Notes
+## 🤖 AI Release Notes
 
 AI release notes unavailable
 <!-- AI-END -->
