@@ -30,7 +30,6 @@ on:
 
     outputs:
       image_url:
-        description: "Docker image full URL"
         value: ${{ jobs.docker.outputs.image_url }}
 
 jobs:
