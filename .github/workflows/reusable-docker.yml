@@ -76,6 +76,9 @@ jobs:
           IMAGE="${{ inputs.image_name }}:${{ inputs.tag }}"
           echo "image_url=$IMAGE" >> "$GITHUB_OUTPUT"
 
+      # ─────────────────────────────
+      # 1. SARIF SCAN (BLOCK PIPELINE)
+      # ─────────────────────────────
       - name: Trivy Scan (CRITICAL BLOCK)
         uses: aquasecurity/trivy-action@master
         with:
@@ -85,8 +88,33 @@ jobs:
           severity: CRITICAL,HIGH
           exit-code: 1
 
-      - name: Upload Scan Report
+      - name: Upload SARIF Report
         uses: actions/upload-artifact@v4
         with:
-          name: trivy-report
+          name: trivy-sarif
           path: trivy.sarif
+
+      # ─────────────────────────────
+      # 2. JSON REPORT (FOR README TABLE)
+      # ─────────────────────────────
+      - name: Trivy JSON Report
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ inputs.image_name }}:${{ inputs.tag }}
+          format: json
+          output: trivy.json
+          severity: CRITICAL,HIGH
+        continue-on-error: true
+
+      - name: Generate Vulnerability Table File
+        run: |
+          echo "## 🔐 Vulnerability Report (Trivy)" > trivy-report.md
+          echo "| Severity | Package | Vulnerability | Status |" >> trivy-report.md
+          echo "|----------|---------|---------------|--------|" >> trivy-report.md
+
+          if [ -f trivy.json ]; then
+            jq -r '.Results[]?.Vulnerabilities[]? |
+            "| \(.Severity) | \(.PkgName) | \(.VulnerabilityID) | \(.Status) |"' trivy.json >> trivy-report.md
+          else
+            echo "| No data | - | - | - |" >> trivy-report.md
+          fi
