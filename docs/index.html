@@ -2,18 +2,23 @@
 <html lang="en">
 
 <head>
+
   <meta charset="UTF-8" />
+
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
   <title>DevSecOps CI/CD Dashboard</title>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
+
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
+  <link
+    href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
     rel="stylesheet">
 
   <style>
+
     * {
       margin: 0;
       padding: 0;
@@ -44,12 +49,13 @@
       background: linear-gradient(90deg, #2563eb, #7c3aed);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
-      margin-bottom: 10px;
+      margin-bottom: 12px;
     }
 
     .hero p {
       color: #475569;
       font-size: 1.1rem;
+      line-height: 1.7;
     }
 
     .grid {
@@ -59,15 +65,15 @@
     }
 
     .card {
-      background: rgba(255, 255, 255, 0.85);
+      background: rgba(255, 255, 255, 0.88);
       backdrop-filter: blur(12px);
       border-radius: 24px;
       padding: 28px;
       box-shadow:
         0 10px 30px rgba(0, 0, 0, 0.08),
         0 4px 12px rgba(37, 99, 235, 0.08);
-      transition: 0.3s ease;
       border: 1px solid rgba(255, 255, 255, 0.7);
+      transition: 0.3s ease;
     }
 
     .card:hover {
@@ -80,8 +86,8 @@
     }
 
     h2 {
-      margin-bottom: 14px;
       font-size: 1.3rem;
+      margin-bottom: 14px;
       color: #0f172a;
     }
 
@@ -101,7 +107,7 @@
       border-radius: 999px;
       font-size: 0.9rem;
       font-weight: 600;
-      margin-top: 12px;
+      margin-top: 14px;
     }
 
     .success {
@@ -120,35 +126,63 @@
     }
 
     .flow {
-      margin-top: 14px;
-      font-weight: 500;
+      margin-top: 10px;
+      font-weight: 600;
       color: #0f172a;
     }
 
-    .badges {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 12px;
+    .highlight {
+      color: #16a34a;
+      font-weight: 700;
       margin-top: 12px;
     }
 
-    .badges img {
-      height: 28px;
+    .workflow-list {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      margin-top: 18px;
     }
 
-    .footer {
-      text-align: center;
-      margin-top: 50px;
-      color: #64748b;
-      font-size: 0.95rem;
+    .workflow-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      background: #f8fafc;
+      padding: 14px 16px;
+      border-radius: 16px;
+    }
+
+    .workflow-item span {
+      font-weight: 600;
+      color: #0f172a;
+    }
+
+    .workflow-item img {
+      max-width: 100%;
+      height: auto;
+    }
+
+    .docker-metrics {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      margin-top: 18px;
+    }
+
+    .docker-metrics img {
+      max-width: 100%;
+      width: fit-content;
     }
 
     .architecture {
-      margin-top: 50px;
+      margin-top: 60px;
     }
 
     .architecture-box {
-      margin-top: 20px;
+      margin-top: 24px;
       background: white;
       border-radius: 24px;
       padding: 30px;
@@ -181,25 +215,59 @@
       color: #64748b;
     }
 
-    .highlight {
-      color: #16a34a;
-      font-weight: 700;
+    .footer {
+      text-align: center;
+      margin-top: 60px;
+      color: #64748b;
+      font-size: 0.95rem;
     }
 
     @media(max-width:768px) {
+
+      body {
+        padding: 20px 14px;
+      }
+
       .hero h1 {
-        font-size: 2.2rem;
+        font-size: 2rem;
+        line-height: 1.3;
+      }
+
+      .hero p {
+        font-size: 0.95rem;
+      }
+
+      .card {
+        padding: 20px;
       }
 
       .pipeline {
         flex-direction: column;
       }
 
+      .step {
+        width: 100%;
+      }
+
       .arrow {
         transform: rotate(90deg);
       }
+
+      .workflow-item {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .workflow-item img,
+      .docker-metrics img {
+        width: 100%;
+        max-width: 320px;
+      }
+
     }
+
   </style>
+
 </head>
 
 <body>
@@ -207,29 +275,38 @@
   <div class="container">
 
     <div class="hero">
+
       <h1>🚀 DevSecOps CI/CD Dashboard</h1>
-      <p>Production-ready Node.js CI/CD pipeline with Docker, GitHub Actions & Trivy Security</p>
+
+      <p>
+        Production-ready Node.js CI/CD pipeline with Docker,
+        GitHub Actions & Trivy Security Scanning
+      </p>
+
     </div>
 
     <div class="grid">
 
       <div class="card">
+
         <div class="icon">📌</div>
 
         <h2>Project Overview</h2>
 
         <p>
-          Full DevSecOps implementation for a Node.js application with automated
-          CI/CD workflows, Docker containerization, Trivy vulnerability scanning,
-          deployment automation and GitHub Actions integration.
+          Complete DevSecOps implementation for a Node.js application
+          featuring automated CI/CD workflows, Docker containerization,
+          Trivy vulnerability scanning and deployment automation.
         </p>
 
         <div class="status success">
           ✅ Production Ready
         </div>
+
       </div>
 
       <div class="card">
+
         <div class="icon">🛠️</div>
 
         <h2>Tech Stack</h2>
@@ -241,9 +318,11 @@
           <li>Trivy Security Scanner</li>
           <li>GitHub Pages</li>
         </ul>
+
       </div>
 
       <div class="card">
+
         <div class="icon">📦</div>
 
         <h2>Pipeline Flow</h2>
@@ -253,67 +332,105 @@
         </p>
 
         <div class="status secure">
-          🔐 HIGH / CRITICAL blocked
+          🔐 HIGH / CRITICAL vulnerabilities blocked
         </div>
+
       </div>
 
       <div class="card">
+
         <div class="icon">🚀</div>
 
         <h2>Release Summary</h2>
 
         <p><strong>Build:</strong> Success</p>
+
         <p><strong>Docker:</strong> Success</p>
+
         <p><strong>Version:</strong> v1.0.x</p>
+
         <p><strong>Security:</strong> Trivy Enforced</p>
 
         <div class="status version">
           📌 Latest Stable Release
         </div>
+
       </div>
 
       <div class="card">
+
         <div class="icon">🔄</div>
 
         <h2>Workflow Status</h2>
 
-        <div class="badges">
+        <div class="workflow-list">
 
-          <img src="https://github.com/malathi-shetty/github-actions-capstone/actions/workflows/pr-pipeline.yml/badge.svg">
+          <div class="workflow-item">
 
-          <img src="https://github.com/malathi-shetty/github-actions-capstone/actions/workflows/main-pipeline.yml/badge.svg">
+            <span>PR Pipeline</span>
 
-          <img src="https://github.com/malathi-shetty/github-actions-capstone/actions/workflows/reusable-docker.yml/badge.svg">
+            <img
+              alt="PR Pipeline"
+              src="https://github.com/malathi-shetty/github-actions-capstone/actions/workflows/pr-pipeline.yml/badge.svg">
 
-          <img src="https://github.com/malathi-shetty/github-actions-capstone/actions/workflows/health-check.yml/badge.svg">
+          </div>
+
+          <div class="workflow-item">
+
+            <span>Main Pipeline</span>
+
+            <img
+              alt="Main Pipeline"
+              src="https://github.com/malathi-shetty/github-actions-capstone/actions/workflows/main-pipeline.yml/badge.svg">
+
+          </div>
+
+          <div class="workflow-item">
+
+            <span>Health Check</span>
+
+            <img
+              alt="Health Check"
+              src="https://github.com/malathi-shetty/github-actions-capstone/actions/workflows/health-check.yml/badge.svg">
+
+          </div>
 
         </div>
-<br>
+
+        <br>
+
         <h2>Docker Metrics</h2>
 
-        <div class="badges">
+        <div class="docker-metrics">
 
-          <img src="https://img.shields.io/docker/pulls/shettymalathi113/github-actions-capstone">
+          <img
+            alt="Docker Pulls"
+            src="https://img.shields.io/docker/pulls/shettymalathi113/github-actions-capstone">
 
-          <img src="https://img.shields.io/docker/image-size/shettymalathi113/github-actions-capstone/latest">
+          <img
+            alt="Docker Image Size"
+            src="https://img.shields.io/docker/image-size/shettymalathi113/github-actions-capstone/latest">
 
         </div>
+
       </div>
 
       <div class="card">
+
         <div class="icon">🔐</div>
 
         <h2>Security Status</h2>
 
         <p>
           Automated vulnerability scanning is enabled using Trivy.
-          Pipeline automatically blocks deployments if HIGH or CRITICAL
-          vulnerabilities are detected.
+          The pipeline automatically blocks deployments if HIGH
+          or CRITICAL vulnerabilities are detected.
         </p>
 
         <p class="highlight">
           ✔ Secure CI/CD Enforcement Enabled
         </p>
+
       </div>
 
     </div>
@@ -321,7 +438,11 @@
     <div class="architecture">
 
       <div class="hero">
-        <h1 style="font-size:2.2rem;">🧱 CI/CD Architecture</h1>
+
+        <h1 style="font-size:2.2rem;">
+          🧱 CI/CD Architecture
+        </h1>
+
       </div>
 
       <div class="architecture-box">
@@ -357,7 +478,9 @@
     </div>
 
     <div class="footer">
+
       Built with ❤️ using DevSecOps & GitHub Actions
+
     </div>
 
   </div>
