@@ -67,6 +67,14 @@ flowchart TD
     H --> I[README Auto Update]
 ```
 
+----
+
+## 🔐 Vulnerability Report (Trivy)
+
+<!-- TRIVY-TABLE-START -->
+_No scan data yet_
+<!-- TRIVY-TABLE-END -->
+
 ---
 
 ## 🤖 AI Release Notes
