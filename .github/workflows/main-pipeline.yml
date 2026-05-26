@@ -21,7 +21,7 @@ jobs:
       run_tests: true
 
   # ─────────────────────────────
-  # 2. DOCKER BUILD (NO TRIVY HERE)
+  # 2. DOCKER BUILD
   # ─────────────────────────────
   docker:
     name: Docker Build
@@ -37,7 +37,41 @@ jobs:
       docker_token: ${{ secrets.DOCKER_TOKEN }}
 
   # ─────────────────────────────
-  # 3. DEPLOY
+  # 3. TRIVY SCAN (FIXED - NO CLI)
+  # ─────────────────────────────
+  trivy-scan:
+    name: Trivy Scan
+    needs: docker
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Trivy Scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: shettymalathi113/github-actions-capstone:v1.0.${{ github.run_number }}-${{ github.sha }}
+          format: json
+          output: trivy.json
+          severity: CRITICAL,HIGH
+          exit-code: 0
+
+      - name: Generate Trivy Table
+        run: |
+          echo "## 🔐 Vulnerability Report (Trivy)" > trivy.md
+          echo "" >> trivy.md
+          echo "| Severity | Package | Vulnerability | Status |" >> trivy.md
+          echo "|----------|---------|---------------|--------|" >> trivy.md
+
+          if [ -f trivy.json ]; then
+            jq -r '.Results[]?.Vulnerabilities[]? |
+            "| \(.Severity) | \(.PkgName) | \(.VulnerabilityID) | \(.Status) |"' trivy.json >> trivy.md
+          else
+            echo "| No scan data yet | - | - | - |" >> trivy.md
+          fi
+
+  # ─────────────────────────────
+  # 4. DEPLOY
   # ─────────────────────────────
   deploy:
     name: Deploy
@@ -52,47 +86,7 @@ jobs:
           echo "Health check passed"
 
   # ─────────────────────────────
-  # 4. GITHUB PAGES
-  # ─────────────────────────────
-  deploy-pages:
-    name: Deploy GitHub Pages Dashboard
-    needs: docker
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Create docs folder
-        run: mkdir -p docs
-
-      - name: Generate Dashboard
-        run: |
-          echo "<!DOCTYPE html>" > docs/index.html
-          echo "<html><head><title>DevSecOps Dashboard</title></head><body>" >> docs/index.html
-
-          echo "<h1>🚀 CI/CD Live Dashboard</h1>" >> docs/index.html
-          echo "<p><b>Image:</b> v1.0.${{ github.run_number }}-${{ github.sha }}</p>" >> docs/index.html
-          echo "<p><b>Version:</b> v1.0.${{ github.run_number }}</p>" >> docs/index.html
-          echo "<p><b>Commit:</b> ${{ github.sha }}</p>" >> docs/index.html
-          echo "<p><b>Time:</b> $(date -u)</p>" >> docs/index.html
-
-          echo "<h2>Pipeline Status</h2>" >> docs/index.html
-          echo "<ul>" >> docs/index.html
-          echo "<li>Build → Success</li>" >> docs/index.html
-          echo "<li>Docker → Success</li>" >> docs/index.html
-          echo "<li>Trivy → Done</li>" >> docs/index.html
-          echo "</ul>" >> docs/index.html
-
-          echo "</body></html>" >> docs/index.html
-
-      - name: Deploy Pages
-        uses: peaceiris/actions-gh-pages@v3
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: docs
-
-  # ─────────────────────────────
-  # 5. VERSION TAGGING
+  # 5. VERSION TAGGING (FIXED)
   # ─────────────────────────────
   versioning:
     name: Create Git Tag
@@ -108,8 +102,11 @@ jobs:
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
-          git tag v1.0.${GITHUB_RUN_NUMBER}
-          git push origin v1.0.${GITHUB_RUN_NUMBER}
+
+          TAG="v1.0.${GITHUB_RUN_NUMBER}"
+
+          git tag $TAG
+          git push origin $TAG
 
   # ─────────────────────────────
   # 6. SAVE STATUS
@@ -132,10 +129,10 @@ jobs:
           path: docker-status.txt
 
   # ─────────────────────────────
-  # 7. AI + TRIVY (FIXED)
+  # 7. AI RELEASE NOTES (SAFE)
   # ─────────────────────────────
   ai-release:
-    name: AI Release Notes + Trivy
+    name: AI Release Notes
     needs: docker
     runs-on: ubuntu-latest
     permissions:
@@ -144,15 +141,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # ─────────────────────────────
-      # AI RELEASE NOTES
-      # ─────────────────────────────
-      - name: Generate AI Release Notes
+      - name: Generate AI Notes
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          set -e
-
           SHORT_SHA=$(echo $GITHUB_SHA | cut -c1-7)
 
           RESPONSE=$(curl -s https://api.openai.com/v1/chat/completions \
@@ -167,7 +159,7 @@ jobs:
                 },
                 {
                   \"role\": \"user\",
-                  \"content\": \"Generate release notes for CI/CD pipeline. Commit $SHORT_SHA Version v1.0.${GITHUB_RUN_NUMBER}\"
+                  \"content\": \"Commit $SHORT_SHA Version v1.0.${GITHUB_RUN_NUMBER}\"
                 }
               ]
             }")
@@ -182,52 +174,19 @@ jobs:
           echo "" >> ai.md
           echo "$AI_TEXT" >> ai.md
 
-      # ─────────────────────────────
-      # TRIVY SCAN (REAL FIX)
-      # ─────────────────────────────
-      - name: Run Trivy Scan
-        run: |
-          trivy image \
-            --format json \
-            --output trivy.json \
-            --severity CRITICAL,HIGH \
-            shettymalathi113/github-actions-capstone:v1.0.${GITHUB_RUN_NUMBER}-${GITHUB_SHA}
-
-      - name: Generate Trivy Table
-        run: |
-          echo "## 🔐 Vulnerability Report (Trivy)" > trivy.md
-          echo "" >> trivy.md
-          echo "| Severity | Package | Vulnerability | Status |" >> trivy.md
-          echo "|----------|---------|---------------|--------|" >> trivy.md
-
-          if [ -f trivy.json ]; then
-            jq -r '.Results[]?.Vulnerabilities[]? |
-            "| \(.Severity) | \(.PkgName) | \(.VulnerabilityID) | \(.Status) |"' trivy.json >> trivy.md
-          else
-            echo "| No vulnerabilities found | - | - | - |" >> trivy.md
-          fi
-
-      # ─────────────────────────────
-      # UPDATE README
-      # ─────────────────────────────
       - name: Update README
         run: |
           awk '
-          /<!-- AI-START -->/ {print; system("cat ai.md"); skip1=1; next}
-          /<!-- AI-END -->/ {skip1=0}
-          /<!-- TRIVY-TABLE-START -->/ {print; system("cat trivy.md"); skip2=1; next}
-          /<!-- TRIVY-TABLE-END -->/ {skip2=0}
-          !skip1 && !skip2
+          /<!-- AI-START -->/ {print; system("cat ai.md"); skip=1; next}
+          /<!-- AI-END -->/ {skip=0}
+          !skip
           ' README.md > tmp && mv tmp README.md
 
-      # ─────────────────────────────
-      # COMMIT README
-      # ─────────────────────────────
       - name: Commit README
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
           git add README.md
-          git commit -m "docs: update AI + Trivy report" || exit 0
+          git commit -m "update AI notes" || exit 0
           git pull --rebase origin main || true
           git push origin HEAD:main
