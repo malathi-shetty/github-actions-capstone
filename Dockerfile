@@ -1,4 +1,5 @@
-FROM node:22-alpine
+# Temporary vulnerable image for Trivy testing
+FROM node:14-alpine
 
 # Update npm
 RUN npm install -g npm@latest \
@@ -9,10 +10,6 @@ WORKDIR /app
 
 # Copy package files
 COPY package*.json ./
-
-# Install dependencies
-RUN npm ci --omit=dev \
-    && npm cache clean --force
 
 # Copy application source
 COPY --chown=node:node . .
