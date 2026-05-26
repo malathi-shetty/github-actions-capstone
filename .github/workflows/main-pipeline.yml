@@ -44,7 +44,7 @@ jobs:
       docker_token: ${{ secrets.DOCKER_TOKEN }}
 
 # =========================================
-# TRIVY SCAN (JSON + SARIF)
+# TRIVY SCAN (JSON + SARIF FIXED)
 # =========================================
 
   trivy-scan:
@@ -58,60 +58,71 @@ jobs:
 
     steps:
 
-    - name: Install Trivy
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y wget jq
+      - name: Install Trivy
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget jq
 
-        wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | \
-        gpg --dearmor | sudo tee /usr/share/keyrings/trivy.gpg > /dev/null
+          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | \
+          gpg --dearmor | sudo tee /usr/share/keyrings/trivy.gpg > /dev/null
 
-        echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb generic main" | \
-        sudo tee /etc/apt/sources.list.d/trivy.list
+          echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb generic main" | \
+          sudo tee /etc/apt/sources.list.d/trivy.list
 
-        sudo apt-get update
-        sudo apt-get install -y trivy
+          sudo apt-get update
+          sudo apt-get install -y trivy
 
-    - name: Verify Trivy
-      run: trivy --version
+      - name: Verify Trivy
+        run: trivy --version
 
-    # =========================
-    # JSON REPORT (for pipeline)
-    # =========================
-    - name: Run Trivy JSON Scan
-      run: |
-        trivy image \
-          --severity HIGH,CRITICAL \
-          --ignore-unfixed \
-          --format json \
-          --output trivy.json \
-          shettymalathi113/github-actions-capstone:v1.0.${{ github.run_number }}
+# =========================================
+# JSON SCAN (for reports + gate)
+# =========================================
 
-    # =========================
-    # SARIF REPORT (for Security Tab)
-    # =========================
-    - name: Run Trivy SARIF Scan
-      run: |
-        trivy image \
-          --severity HIGH,CRITICAL \
-          --ignore-unfixed \
-          --format sarif \
-          --output trivy-results.sarif \
-          --exit-code 0 \
-          shettymalathi113/github-actions-capstone:v1.0.${{ github.run_number }}
+      - name: Run Trivy JSON Scan
+        run: |
+          trivy image \
+            --severity HIGH,CRITICAL \
+            --ignore-unfixed \
+            --format json \
+            --output trivy.json \
+            shettymalathi113/github-actions-capstone:v1.0.${{ github.run_number }}
 
-    - name: Upload SARIF to GitHub Security Tab
-      uses: github/codeql-action/upload-sarif@v3
-      with:
-        sarif_file: trivy-results.sarif
+# =========================================
+# SARIF SCAN (FIXED - THIS WAS YOUR ISSUE)
+# =========================================
 
-    - name: Upload Artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: trivy-reports
-        path: |
-          trivy.json
-          trivy-results.sarif
+      - name: Run Trivy SARIF Scan
+        run: |
+          trivy image \
+            --severity HIGH,CRITICAL \
+            --ignore-unfixed \
+            --format sarif \
+            --output trivy-results.sarif \
+            shettymalathi113/github-actions-capstone:v1.0.${{ github.run_number }}
+
+          ls -l trivy-results.sarif
+
+# =========================================
+# UPLOAD SARIF TO SECURITY TAB (IMPORTANT)
+# =========================================
+
+      - name: Upload SARIF to GitHub Security Tab
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif
+
+# =========================================
+# UPLOAD ARTIFACTS
+# =========================================
+
+      - name: Upload Reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-reports
+          path: |
+            trivy.json
+            trivy-results.sarif
 
 # =========================================
 # GENERATE REPORTS
@@ -124,37 +135,37 @@ jobs:
 
     steps:
 
-    - name: Download Reports
-      uses: actions/download-artifact@v4
-      with:
-        name: trivy-reports
+      - name: Download Reports
+        uses: actions/download-artifact@v4
+        with:
+          name: trivy-reports
 
-    - name: Generate Markdown Report
-      run: |
-        echo "## 🔐 Trivy Vulnerability Report" > trivy.md
-        echo "| Severity | Package | Vulnerability | Installed | Fixed |" >> trivy.md
-        echo "|---|---|---|---|---|" >> trivy.md
+      - name: Generate Markdown Report
+        run: |
+          echo "## 🔐 Trivy Vulnerability Report" > trivy.md
+          echo "| Severity | Package | Vulnerability | Installed | Fixed |" >> trivy.md
+          echo "|---|---|---|---|---|" >> trivy.md
 
-        jq -r '
-        .Results[]?.Vulnerabilities[]? |
-        "| \(.Severity) | \(.PkgName) | \(.VulnerabilityID) | \(.InstalledVersion) | \(.FixedVersion // "N/A") |"
-        ' trivy.json >> trivy.md
+          jq -r '
+          .Results[]?.Vulnerabilities[]? |
+          "| \(.Severity) | \(.PkgName) | \(.VulnerabilityID) | \(.InstalledVersion) | \(.FixedVersion // "N/A") |"
+          ' trivy.json >> trivy.md
 
-    - name: Generate AI Notes
-      run: |
-        echo "## AI Notes" > ai.md
-        echo "- Trivy scan completed" >> ai.md
-        echo "- SARIF uploaded to Security tab" >> ai.md
+      - name: Generate AI Notes
+        run: |
+          echo "## AI Notes" > ai.md
+          echo "- Trivy scan completed" >> ai.md
+          echo "- SARIF uploaded to Security tab" >> ai.md
 
-    - name: Upload Reports
-      uses: actions/upload-artifact@v4
-      with:
-        name: reports
-        path: |
-          trivy.md
-          ai.md
-          trivy.json
-          trivy-results.sarif
+      - name: Upload Reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: reports
+          path: |
+            trivy.md
+            ai.md
+            trivy.json
+            trivy-results.sarif
 
 # =========================================
 # SECURITY GATE
@@ -167,23 +178,23 @@ jobs:
 
     steps:
 
-    - name: Download Reports
-      uses: actions/download-artifact@v4
-      with:
-        name: reports
+      - name: Download Reports
+        uses: actions/download-artifact@v4
+        with:
+          name: reports
 
-    - name: Fail on HIGH/CRITICAL
-      run: |
-        CRITICAL=$(jq '[.Results[].Vulnerabilities[]? | select(.Severity=="CRITICAL")] | length' trivy.json)
-        HIGH=$(jq '[.Results[].Vulnerabilities[]? | select(.Severity=="HIGH")] | length' trivy.json)
+      - name: Fail Build If Vulnerabilities Found
+        run: |
+          CRITICAL=$(jq '[.Results[].Vulnerabilities[]? | select(.Severity=="CRITICAL")] | length' trivy.json)
+          HIGH=$(jq '[.Results[].Vulnerabilities[]? | select(.Severity=="HIGH")] | length' trivy.json)
 
-        echo "CRITICAL=$CRITICAL"
-        echo "HIGH=$HIGH"
+          echo "CRITICAL=$CRITICAL"
+          echo "HIGH=$HIGH"
 
-        if [ "$CRITICAL" -gt 0 ] || [ "$HIGH" -gt 0 ]; then
-          echo "Security gate FAILED"
-          exit 1
-        fi
+          if [ "$CRITICAL" -gt 0 ] || [ "$HIGH" -gt 0 ]; then
+            echo "HIGH or CRITICAL vulnerabilities found"
+            exit 1
+          fi
 
 # =========================================
 # DEPLOY
