@@ -1,3 +1,4 @@
+
 # 🚀 DevSecOps CI/CD Pipeline
 
 ## 📌 Project Overview
@@ -49,35 +50,28 @@ Build → Test → Docker → Scan → Tag → Deploy
 ![Pulls](https://img.shields.io/docker/pulls/shettymalathi113/github-actions-capstone)
 ![Size](https://img.shields.io/docker/image-size/shettymalathi113/github-actions-capstone/latest)
 
-
 ---
-
-
 
 ## 🧱 CI/CD Architecture (Visual Flow)
 
 ```mermaid
-Developer Push
-      ↓
-GitHub Actions Trigger
-      ↓
-Build & Test
-      ↓
-Docker Build
-      ↓
-Trivy Security Scan (BLOCK CRITICAL)
-      ↓
-Push to Docker Hub
-      ↓
-Git Tag Release
-      ↓
-Deploy
-      ↓
-README Auto Update
+flowchart TD
+    A[Developer Push] --> B[GitHub Actions Trigger]
+    B --> C[Build & Test]
+    C --> D[Docker Build]
+    D --> E[Trivy Security Scan]
+    E -->|FAIL CRITICAL| X[Block Pipeline ❌]
+    E -->|PASS| F[Push Docker Image]
+    F --> G[Git Tag Release]
+    G --> H[Deploy]
+    H --> I[README Auto Update]
+````
 
-```
-------
+---
 
+## 🤖 AI RELEASE NOTES (GITHUB ACTION STEP)
+
+```yaml
 - name: Generate AI Release Notes
   run: |
     SHORT_SHA=$(echo $GITHUB_SHA | cut -c1-7)
@@ -96,9 +90,8 @@ README Auto Update
     echo "- Commit: $SHORT_SHA" >> release.md
     echo "- Version: v1.0.${GITHUB_RUN_NUMBER}" >> release.md
     echo "- Timestamp (UTC): $TIME" >> release.md
-    echo "- Deployment Time (UTC): $(date -u)" >> release.md
 
-    - name: Generate AI Release Notes (OpenAI)
+- name: Generate AI Release Notes (OpenAI)
   env:
     OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
   run: |
@@ -107,22 +100,24 @@ README Auto Update
     RESPONSE=$(curl -s https://api.openai.com/v1/chat/completions \
       -H "Authorization: Bearer $OPENAI_API_KEY" \
       -H "Content-Type: application/json" \
-      -d '{
-        "model": "gpt-4o-mini",
-        "messages": [
+      -d "{
+        \"model\": \"gpt-4o-mini\",
+        \"messages\": [
           {
-            "role": "system",
-            "content": "You are a DevSecOps release notes generator."
+            \"role\": \"system\",
+            \"content\": \"You are a DevSecOps release notes generator.\"
           },
           {
-            "role": "user",
-            "content": "Generate professional release notes for a CI/CD pipeline. Include build, docker, security scan, commit '"$SHORT_SHA"' and version v1.0.'"${GITHUB_RUN_NUMBER}"'. Keep it concise and professional."
+            \"role\": \"user\",
+            \"content\": \"Generate professional release notes for CI/CD pipeline. Commit $SHORT_SHA Version v1.0.${GITHUB_RUN_NUMBER}\"
           }
         ]
-      }')
+      }")
 
     echo "$RESPONSE" > ai_response.json
 
     echo "## 🤖 AI Release Notes" > release.md
     echo "" >> release.md
     echo "$RESPONSE" >> release.md
+```
+
