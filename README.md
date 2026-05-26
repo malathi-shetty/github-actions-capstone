@@ -56,7 +56,7 @@ Build → Test → Docker → Scan → Tag → Deploy
 
 ## 🧱 CI/CD Architecture (Visual Flow)
 
-```bash
+```mermaid
 Developer Push
       ↓
 GitHub Actions Trigger
@@ -75,6 +75,7 @@ Deploy
       ↓
 README Auto Update
 
+```
 ------
 
 - name: Generate AI Release Notes
