@@ -1,10 +1,6 @@
 # Temporary vulnerable image for Trivy testing
 FROM node:14-alpine
 
-# Update npm
-RUN npm install -g npm@latest \
-    && npm cache clean --force
-
 # Create app directory
 WORKDIR /app
 
