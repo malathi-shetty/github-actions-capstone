@@ -88,8 +88,6 @@ Build → Test → Docker → Scan → Tag → Deploy
 | Severity | Package | Vulnerability | Installed Version | Fixed Version |
 |---|---|---|---|---|
 
-_No HIGH or CRITICAL vulnerabilities detected ✅_
-
 <!-- TRIVY-TABLE-END -->
 
 This section is automatically updated by CI/CD pipeline using Trivy scan results.
