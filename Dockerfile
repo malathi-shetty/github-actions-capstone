@@ -1,5 +1,7 @@
 #FROM node:22-alpine
-FROM node:14-alpine # To check HIGH/CRITICAL vulnerabilities
+
+# Temporary vulnerable image for Trivy testing
+FROM node:14-alpine
 
 # Update npm
 RUN npm install -g npm@latest \
