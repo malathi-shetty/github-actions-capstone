@@ -5,25 +5,20 @@ on:
     branches: [main]
   workflow_dispatch:
 
-permissions:name: Main Pipeline
-
-on:
-  push:
-    branches: [main]
-  workflow_dispatch:
-
 permissions:
   contents: write
 
 jobs:
 
   build-test:
+    name: Build & Test
     uses: ./.github/workflows/reusable-build-test.yml
     with:
       node_version: "20"
       run_tests: true
 
   docker:
+    name: Docker Build
     needs: build-test
     uses: ./.github/workflows/reusable-docker.yml
     with:
@@ -35,221 +30,92 @@ jobs:
       docker_username: ${{ secrets.DOCKER_USERNAME }}
       docker_token: ${{ secrets.DOCKER_TOKEN }}
 
-  # ─────────────────────────────
-  # 🛡️ TRIVY SCAN (FIXED HERE)
-  # ─────────────────────────────
-  trivy:
+  deploy:
+    name: Deploy
     needs: docker
     runs-on: ubuntu-latest
+    steps:
+      - name: Deploy App
+        run: |
+          echo "Deploying IMAGE v1.0.${{ github.run_number }}-${{ github.sha }}"
+          echo "Success"
+
+  ai-trivy:
+    name: AI + Trivy Report
+    needs: docker
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
+      - uses: actions/checkout@v4
+
+      # ─────────────────────────────
+      # INSTALL TRIVY (FIXED - NO DOWNLOAD ISSUES)
+      # ─────────────────────────────
       - name: Install Trivy
         run: |
           sudo apt-get update
           sudo apt-get install -y wget
-          wget https://github.com/aquasecurity/trivy/releases/latest/download/trivy_0.70.0_Linux-64bit.deb
-          sudo dpkg -i trivy_0.70.0_Linux-64bit.deb
+          wget https://github.com/aquasecurity/trivy/releases/download/v0.48.0/trivy_0.48.0_Linux-64bit.deb
+          sudo dpkg -i trivy_0.48.0_Linux-64bit.deb
 
+      # ─────────────────────────────
+      # RUN TRIVY
+      # ─────────────────────────────
       - name: Run Trivy Scan
         run: |
-          IMAGE="shettymalathi113/github-actions-capstone:v1.0.${{ github.run_number }}-${{ github.sha }}"
-
           trivy image \
-            --format table \
-            --severity CRITICAL,HIGH \
-            $IMAGE
+            --format json \
+            --output trivy.json \
+            ${{ needs.docker.outputs.image_url || 'shettymalathi113/github-actions-capstone:latest' }}
 
-  deploy:
-    needs: trivy
-    runs-on: ubuntu-latest
-    steps:
-      - run: echo "Deploying app..."
+      # ─────────────────────────────
+      # CREATE TRIVY TABLE
+      # ─────────────────────────────
+      - name: Generate Trivy Table
+        run: |
+          echo "## 🔐 Vulnerability Report (Trivy)" > trivy.md
+          echo "" >> trivy.md
+          echo "| Severity | Package | Vulnerability | Status |" >> trivy.md
+          echo "|----------|---------|---------------|--------|" >> trivy.md
 
-  ai-release:
-    needs: trivy
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+          if [ -f trivy.json ]; then
+            jq -r '.Results[]?.Vulnerabilities[]? |
+            "| \(.Severity) | \(.PkgName) | \(.VulnerabilityID) | \(.Status) |"' trivy.json >> trivy.md
+          else
+            echo "| No scan data yet | - | - | - |" >> trivy.md
+          fi
 
-      - name: Generate AI Notes File
+      # ─────────────────────────────
+      # AI NOTES
+      # ─────────────────────────────
+      - name: Generate AI Notes
         run: |
           echo "## 🤖 AI Release Notes" > ai.md
-          echo "Pipeline completed successfully" >> ai.md
+          echo "" >> ai.md
+          echo "Auto-generated release notes for v1.0.${{ github.run_number }}" >> ai.md
+          echo "- Build successful" >> ai.md
+          echo "- Docker built" >> ai.md
+          echo "- Trivy scan completed" >> ai.md
 
+      # ─────────────────────────────
+      # UPDATE README SAFELY
+      # ─────────────────────────────
       - name: Update README
         run: |
           awk '
           /<!-- AI-START -->/ {print; system("cat ai.md"); skip=1; next}
           /<!-- AI-END -->/ {skip=0}
-          !skip
-          ' README.md > tmp && mv tmp README.md
-  contents: write
-
-jobs:
-
-  # ─────────────────────────────
-  # 1. BUILD & TEST
-  # ─────────────────────────────
-  build-test:
-    uses: ./.github/workflows/reusable-build-test.yml
-    with:
-      node_version: "20"
-      run_tests: true
-
-  # ─────────────────────────────
-  # 2. DOCKER BUILD (NO TRIVY HERE)
-  # ─────────────────────────────
-  docker:
-    needs: build-test
-    uses: ./.github/workflows/reusable-docker.yml
-    with:
-      image_name: "shettymalathi113/github-actions-capstone"
-      tag: v1.0.${{ github.run_number }}-${{ github.sha }}
-      sha_tag: sha-${{ github.sha }}
-      push: true
-    secrets:
-      docker_username: ${{ secrets.DOCKER_USERNAME }}
-      docker_token: ${{ secrets.DOCKER_TOKEN }}
-
-  # ─────────────────────────────
-  # 3. TRIVY SCAN (FIXED)
-  # ─────────────────────────────
-  trivy-scan:
-    needs: docker
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install Trivy
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y wget
-          wget https://github.com/aquasecurity/trivy/releases/latest/download/trivy_0.48.0_Linux-64bit.deb
-          sudo dpkg -i trivy_0.48.0_Linux-64bit.deb
-
-      - name: Run Trivy Scan
-        run: |
-          trivy image \
-            --severity CRITICAL,HIGH \
-            --format table \
-            ${{ needs.docker.outputs.image_url }} || true
-
-  # ─────────────────────────────
-  # 4. DEPLOY
-  # ─────────────────────────────
-  deploy:
-    needs: trivy-scan
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Deploy App
-        run: |
-          echo "Deploying image..."
-          echo "Done"
-
-  # ─────────────────────────────
-  # 5. GITHUB PAGES
-  # ─────────────────────────────
-  deploy-pages:
-    needs: docker
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Create docs
-        run: mkdir -p docs
-
-      - name: Generate Dashboard
-        run: |
-          echo "<html><body>" > docs/index.html
-          echo "<h1>CI/CD Dashboard</h1>" >> docs/index.html
-          echo "<p>Image: v1.0.${{ github.run_number }}</p>" >> docs/index.html
-          echo "<p>Commit: ${{ github.sha }}</p>" >> docs/index.html
-          echo "</body></html>" >> docs/index.html
-
-      - name: Deploy Pages
-        uses: peaceiris/actions-gh-pages@v3
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: docs
-
-  # ─────────────────────────────
-  # 6. VERSION TAGGING (FIXED PERMISSION ISSUE)
-  # ─────────────────────────────
-  versioning:
-    needs: deploy
-    runs-on: ubuntu-latest
-
-    permissions:
-      contents: write
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Create Tag
-        run: |
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
-          git tag v1.0.${{ github.run_number }}
-          git push origin v1.0.${{ github.run_number }}
-
-  # ─────────────────────────────
-  # 7. AI RELEASE NOTES
-  # ─────────────────────────────
-  ai-release:
-    needs: trivy-scan
-    runs-on: ubuntu-latest
-
-    permissions:
-      contents: write
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Generate AI Notes
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: |
-          SHORT_SHA=$(echo $GITHUB_SHA | cut -c1-7)
-
-          RESPONSE=$(curl -s https://api.openai.com/v1/chat/completions \
-            -H "Authorization: Bearer $OPENAI_API_KEY" \
-            -H "Content-Type: application/json" \
-            -d "{
-              \"model\": \"gpt-4o-mini\",
-              \"messages\": [
-                {
-                  \"role\": \"system\",
-                  \"content\": \"You are a DevSecOps release notes generator.\"
-                },
-                {
-                  \"role\": \"user\",
-                  \"content\": \"Release notes for v1.0.${{ github.run_number }} commit $SHORT_SHA\"
-                }
-              ]
-            }")
-
-          AI_TEXT=$(echo "$RESPONSE" | jq -r '.choices[0].message.content // empty')
-
-          echo "## 🤖 AI Release Notes" > ai.md
-          echo "" >> ai.md
-          echo "${AI_TEXT:-AI not available}" >> ai.md
-
-      - name: Update README (SAFE)
-        run: |
-          awk '
-          /<!-- AI-START -->/ {print; system("cat ai.md"); skip=1; next}
-          /<!-- AI-END -->/ {skip=0}
-          !skip
+          /<!-- TRIVY-TABLE-START -->/ {print; system("cat trivy.md"); skip2=1; next}
+          /<!-- TRIVY-TABLE-END -->/ {skip2=0}
+          !skip && !skip2
           ' README.md > tmp && mv tmp README.md
 
-      - name: Commit Changes
+      - name: Commit changes
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
           git add README.md
-          git commit -m "update AI notes" || exit 0
-          git push
+          git commit -m "update AI + Trivy" || exit 0
+          git push origin HEAD:main
