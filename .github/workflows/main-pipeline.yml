@@ -23,7 +23,7 @@ jobs:
     uses: ./.github/workflows/reusable-docker.yml
     with:
       image_name: "shettymalathi113/github-actions-capstone"
-      tag: v1.0.${{ github.run_number }}-${{ github.sha }}
+      tag: v1.0.${{ github.run_number }}
       sha_tag: sha-${{ github.sha }}
       push: true
     secrets:
@@ -34,88 +34,140 @@ jobs:
     name: Deploy
     needs: docker
     runs-on: ubuntu-latest
+
     steps:
       - name: Deploy App
         run: |
-          echo "Deploying IMAGE v1.0.${{ github.run_number }}-${{ github.sha }}"
+          echo "Deploying IMAGE"
           echo "Success"
 
   ai-trivy:
     name: AI + Trivy Report
     needs: docker
     runs-on: ubuntu-latest
+
     permissions:
       contents: write
 
     steps:
       - uses: actions/checkout@v4
 
-      # ─────────────────────────────
-      # INSTALL TRIVY (FIXED - NO DOWNLOAD ISSUES)
-      # ─────────────────────────────
+      # =========================
+      # INSTALL TRIVY (CORRECT)
+      # =========================
       - name: Install Trivy
         run: |
           sudo apt-get update
-          sudo apt-get install -y wget
-          wget https://github.com/aquasecurity/trivy/releases/download/v0.48.0/trivy_0.48.0_Linux-64bit.deb
-          sudo dpkg -i trivy_0.48.0_Linux-64bit.deb
+          sudo apt-get install wget apt-transport-https gnupg lsb-release -y
 
-      # ─────────────────────────────
+          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | \
+          gpg --dearmor | \
+          sudo tee /usr/share/keyrings/trivy.gpg > /dev/null
+
+          echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb generic main" | \
+          sudo tee /etc/apt/sources.list.d/trivy.list
+
+          sudo apt-get update
+          sudo apt-get install trivy -y
+
+      # =========================
       # RUN TRIVY
-      # ─────────────────────────────
+      # =========================
       - name: Run Trivy Scan
         run: |
           trivy image \
+            --severity HIGH,CRITICAL \
+            --ignore-unfixed \
             --format json \
             --output trivy.json \
-            ${{ needs.docker.outputs.image_url || 'shettymalathi113/github-actions-capstone:latest' }}
+            shettymalathi113/github-actions-capstone:v1.0.${{ github.run_number }}
 
-      # ─────────────────────────────
-      # CREATE TRIVY TABLE
-      # ─────────────────────────────
-      - name: Generate Trivy Table
+      # =========================
+      # FAIL BUILD IF VULNS FOUND
+      # =========================
+      - name: Fail if vulnerabilities found
+        run: |
+          CRITICAL=$(jq '[.Results[].Vulnerabilities[]? | select(.Severity=="CRITICAL")] | length' trivy.json)
+
+          HIGH=$(jq '[.Results[].Vulnerabilities[]? | select(.Severity=="HIGH")] | length' trivy.json)
+
+          echo "CRITICAL: $CRITICAL"
+          echo "HIGH: $HIGH"
+
+          if [ "$CRITICAL" -gt 0 ] || [ "$HIGH" -gt 0 ]; then
+            echo "HIGH/CRITICAL vulnerabilities found"
+            exit 1
+          fi
+
+      # =========================
+      # GENERATE README TABLE
+      # =========================
+      - name: Generate Trivy Markdown
         run: |
           echo "## 🔐 Vulnerability Report (Trivy)" > trivy.md
           echo "" >> trivy.md
-          echo "| Severity | Package | Vulnerability | Status |" >> trivy.md
-          echo "|----------|---------|---------------|--------|" >> trivy.md
+          echo "| Severity | Package | Vulnerability | Installed Version | Fixed Version |" >> trivy.md
+          echo "|---|---|---|---|---|" >> trivy.md
 
-          if [ -f trivy.json ]; then
-            jq -r '.Results[]?.Vulnerabilities[]? |
-            "| \(.Severity) | \(.PkgName) | \(.VulnerabilityID) | \(.Status) |"' trivy.json >> trivy.md
-          else
-            echo "| No scan data yet | - | - | - |" >> trivy.md
-          fi
+          jq -r '
+          .Results[]?.Vulnerabilities[]? |
+          "| \(.Severity) | \(.PkgName) | \(.VulnerabilityID) | \(.InstalledVersion) | \(.FixedVersion // "N/A") |"
+          ' trivy.json >> trivy.md
 
-      # ─────────────────────────────
+      # =========================
       # AI NOTES
-      # ─────────────────────────────
+      # =========================
       - name: Generate AI Notes
         run: |
           echo "## 🤖 AI Release Notes" > ai.md
           echo "" >> ai.md
-          echo "Auto-generated release notes for v1.0.${{ github.run_number }}" >> ai.md
-          echo "- Build successful" >> ai.md
-          echo "- Docker built" >> ai.md
-          echo "- Trivy scan completed" >> ai.md
+          echo "- Build completed" >> ai.md
+          echo "- Docker image built" >> ai.md
+          echo "- Trivy scan executed" >> ai.md
+          echo "- README auto updated" >> ai.md
 
-      # ─────────────────────────────
-      # UPDATE README SAFELY
-      # ─────────────────────────────
+      # =========================
+      # UPDATE README
+      # =========================
       - name: Update README
         run: |
-          awk '
-          /<!-- AI-START -->/ {print; system("cat ai.md"); skip=1; next}
-          /<!-- AI-END -->/ {skip=0}
-          /<!-- TRIVY-TABLE-START -->/ {print; system("cat trivy.md"); skip2=1; next}
-          /<!-- TRIVY-TABLE-END -->/ {skip2=0}
-          !skip && !skip2
-          ' README.md > tmp && mv tmp README.md
+          python3 << 'EOF'
+          from pathlib import Path
 
-      - name: Commit changes
+          readme = Path("README.md").read_text()
+
+          trivy = Path("trivy.md").read_text()
+          ai = Path("ai.md").read_text()
+
+          import re
+
+          readme = re.sub(
+              r'<!-- TRIVY-TABLE-START -->.*?<!-- TRIVY-TABLE-END -->',
+              f'<!-- TRIVY-TABLE-START -->\n{trivy}\n<!-- TRIVY-TABLE-END -->',
+              readme,
+              flags=re.S
+          )
+
+          readme = re.sub(
+              r'<!-- AI-START -->.*?<!-- AI-END -->',
+              f'<!-- AI-START -->\n{ai}\n<!-- AI-END -->',
+              readme,
+              flags=re.S
+          )
+
+          Path("README.md").write_text(readme)
+          EOF
+
+      # =========================
+      # COMMIT README
+      # =========================
+      - name: Commit README
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
+
           git add README.md
-          git commit -m "update AI + Trivy" || exit 0
-          git push origin HEAD:main
+
+          git commit -m "update trivy report" || exit 0
+
+          git push
