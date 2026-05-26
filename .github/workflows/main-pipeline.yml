@@ -7,11 +7,16 @@ on:
 
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
 
-  # Job 1 — Build & Test
-  build-test:
+  # =========================================
+  # BUILD + TEST
+  # =========================================
 
+  build-test:
     name: Build & Test
 
     uses: ./.github/workflows/reusable-build-test.yml
@@ -20,11 +25,12 @@ jobs:
       node_version: "20"
       run_tests: true
 
+  # =========================================
+  # DOCKER BUILD + PUSH
+  # =========================================
 
-  # Job 2 — Docker Build & Push
   docker:
-
-    name: Docker Build & Push
+    name: Docker Build
 
     needs: build-test
 
@@ -32,7 +38,7 @@ jobs:
 
     with:
       image_name: "shettymalathi113/github-actions-capstone"
-      tag: latest
+      tag: v1.0.${{ github.run_number }}
       sha_tag: sha-${{ github.sha }}
       push: true
 
@@ -40,38 +46,284 @@ jobs:
       docker_username: ${{ secrets.DOCKER_USERNAME }}
       docker_token: ${{ secrets.DOCKER_TOKEN }}
 
+  # =========================================
+  # DEPLOY
+  # =========================================
 
-  # Job 3 — Deploy
   deploy:
+    name: Deploy
 
-    name: Deploy to Production
-
-    needs:
-      - build-test
-      - docker
+    needs: docker
 
     runs-on: ubuntu-latest
 
-    environment:
-      name: production
+    steps:
+
+      - name: Deploy App
+        run: |
+          echo "Deploying IMAGE"
+          echo "Success"
+
+  # =========================================
+  # RUN TRIVY SCAN
+  # =========================================
+
+  trivy-scan:
+    name: Run Trivy Scan
+
+    needs: docker
+
+    runs-on: ubuntu-latest
 
     steps:
 
-      - name: Deploy application
+      # =========================================
+      # INSTALL TRIVY
+      # =========================================
+
+      - name: Install Trivy
         run: |
-          echo "Deploying image: ${{ needs.docker.outputs.image_url }} to production"
 
-      - name: Deployment summary
+          sudo apt-get update
+
+          sudo apt-get install -y \
+            wget \
+            apt-transport-https \
+            gnupg \
+            lsb-release \
+            jq
+
+          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | \
+          gpg --dearmor | \
+          sudo tee /usr/share/keyrings/trivy.gpg > /dev/null
+
+          echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb generic main" | \
+          sudo tee /etc/apt/sources.list.d/trivy.list
+
+          sudo apt-get update
+
+          sudo apt-get install -y trivy
+
+      # =========================================
+      # VERIFY TRIVY
+      # =========================================
+
+      - name: Verify Trivy
+        run: trivy --version
+
+      # =========================================
+      # RUN TRIVY SCAN
+      # =========================================
+
+      - name: Run Trivy Scan
         run: |
-          echo "## Production Deployment" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
 
-          echo "| Key | Value |" >> "$GITHUB_STEP_SUMMARY"
-          echo "|-----|-------|" >> "$GITHUB_STEP_SUMMARY"
+          trivy image \
+            --severity HIGH,CRITICAL \
+            --ignore-unfixed \
+            --format json \
+            --output trivy.json \
+            shettymalathi113/github-actions-capstone:v1.0.${{ github.run_number }}
 
-          echo "| Environment | production |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Triggered by | ${{ github.actor }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Image | \`${{ needs.docker.outputs.image_url }}\` |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Build & Test | ✅ ${{ needs.build-test.outputs.test_result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Commit | \`$(echo "${{ github.sha }}" | cut -c1-7)\` |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Status | ✅ Deploy simulated |" >> "$GITHUB_STEP_SUMMARY"
+      # =========================================
+      # UPLOAD JSON
+      # =========================================
+
+      - name: Upload Trivy JSON
+        uses: actions/upload-artifact@v4
+
+        with:
+          name: trivy-json
+          path: trivy.json
+
+  # =========================================
+  # GENERATE REPORTS
+  # =========================================
+
+  generate-reports:
+    name: Generate Reports
+
+    needs: trivy-scan
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Download Trivy JSON
+        uses: actions/download-artifact@v4
+
+        with:
+          name: trivy-json
+
+      # =========================================
+      # GENERATE TRIVY MARKDOWN
+      # =========================================
+
+      - name: Generate Trivy Markdown
+        run: |
+
+          echo "## 🔐 Vulnerability Report (Trivy)" > trivy.md
+          echo "" >> trivy.md
+
+          echo "| Severity | Package | Vulnerability | Installed Version | Fixed Version |" >> trivy.md
+          echo "|---|---|---|---|---|" >> trivy.md
+
+          jq -r '
+          .Results[]?.Vulnerabilities[]? |
+          "| \(.Severity) | \(.PkgName) | \(.VulnerabilityID) | \(.InstalledVersion) | \(.FixedVersion // "N/A") |"
+          ' trivy.json >> trivy.md
+
+      # =========================================
+      # GENERATE AI NOTES
+      # =========================================
+
+      - name: Generate AI Notes
+        run: |
+
+          echo "## 🤖 AI Release Notes" > ai.md
+          echo "" >> ai.md
+          echo "- Build completed successfully" >> ai.md
+          echo "- Docker image built and pushed" >> ai.md
+          echo "- Trivy scan completed" >> ai.md
+          echo "- README auto updated" >> ai.md
+
+      # =========================================
+      # UPLOAD REPORTS
+      # =========================================
+
+      - name: Upload Reports
+        uses: actions/upload-artifact@v4
+
+        with:
+          name: reports
+
+          path: |
+            trivy.md
+            ai.md
+            trivy.json
+
+  # =========================================
+  # SECURITY GATE
+  # =========================================
+
+  security-gate:
+    name: Security Gate
+
+    needs: generate-reports
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Download Reports
+        uses: actions/download-artifact@v4
+
+        with:
+          name: reports
+
+      - name: Fail Build If Vulnerabilities Found
+        run: |
+
+          CRITICAL=$(jq '[.Results[].Vulnerabilities[]? | select(.Severity=="CRITICAL")] | length' trivy.json)
+
+          HIGH=$(jq '[.Results[].Vulnerabilities[]? | select(.Severity=="HIGH")] | length' trivy.json)
+
+          echo "CRITICAL: $CRITICAL"
+
+          echo "HIGH: $HIGH"
+
+          if [ "$CRITICAL" -gt 0 ] || [ "$HIGH" -gt 0 ]; then
+            echo "HIGH or CRITICAL vulnerabilities found"
+            exit 1
+          fi
+
+  # =========================================
+  # UPDATE README
+  # =========================================
+
+  update-readme:
+    name: Update README
+
+    needs: security-gate
+
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Download Reports
+        uses: actions/download-artifact@v4
+
+        with:
+          name: reports
+
+      - name: Update README
+        run: |
+
+          python3 << 'EOF'
+
+          from pathlib import Path
+          import re
+
+          readme = Path("README.md").read_text()
+
+          trivy = Path("trivy.md").read_text()
+
+          ai = Path("ai.md").read_text()
+
+          readme = re.sub(
+              r'<!-- TRIVY-TABLE-START -->.*?<!-- TRIVY-TABLE-END -->',
+              f'<!-- TRIVY-TABLE-START -->\n{trivy}\n<!-- TRIVY-TABLE-END -->',
+              readme,
+              flags=re.S
+          )
+
+          readme = re.sub(
+              r'<!-- AI-START -->.*?<!-- AI-END -->',
+              f'<!-- AI-START -->\n{ai}\n<!-- AI-END -->',
+              readme,
+              flags=re.S
+          )
+
+          Path("README.md").write_text(readme)
+
+          EOF
+
+  # =========================================
+  # COMMIT README
+  # =========================================
+
+  commit-readme:
+    name: Commit README
+
+    needs: update-readme
+
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Commit README Changes
+        run: |
+
+          git config user.name "github-actions"
+
+          git config user.email "github-actions@github.com"
+
+          git add README.md
+
+          git diff --cached --quiet && exit 0
+
+          git commit -m "[skip ci] update trivy report"
+
+          git push
