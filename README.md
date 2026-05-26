@@ -56,7 +56,7 @@ Build → Test → Docker → Scan → Tag → Deploy
 
 ## 🧱 CI/CD Architecture (Visual Flow)
 
-```text
+```bash
 Developer Push
       ↓
 GitHub Actions Trigger
