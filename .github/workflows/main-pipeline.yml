@@ -59,10 +59,6 @@ jobs:
 
     steps:
 
-      # =========================================
-      # INSTALL TRIVY
-      # =========================================
-
       - name: Install Trivy
         run: |
 
@@ -86,10 +82,6 @@ jobs:
 
           sudo apt-get install -y trivy
 
-      # =========================================
-      # VERIFY TRIVY
-      # =========================================
-
       - name: Verify Trivy
         run: trivy --version
 
@@ -100,6 +92,15 @@ jobs:
       - name: Run Trivy Scan
         run: |
 
+          echo "Running Trivy vulnerability scan..."
+
+          # Show vulnerabilities in logs
+          trivy image \
+            --severity HIGH,CRITICAL \
+            --ignore-unfixed \
+            shettymalathi113/github-actions-capstone:v1.0.${{ github.run_number }}
+
+          # Save JSON report
           trivy image \
             --severity HIGH,CRITICAL \
             --ignore-unfixed \
@@ -108,22 +109,7 @@ jobs:
             shettymalathi113/github-actions-capstone:v1.0.${{ github.run_number }}
 
       # =========================================
-      # SHOW CVEs IN LOGS
-      # =========================================
-
-      - name: Show Vulnerabilities
-        run: |
-
-          echo "Detected Vulnerabilities:"
-          echo ""
-
-          jq -r '
-          .Results[]?.Vulnerabilities[]? |
-          "\(.VulnerabilityID) | \(.Severity) | \(.PkgName) | Installed: \(.InstalledVersion)"
-          ' trivy.json
-
-      # =========================================
-      # UPLOAD JSON
+      # UPLOAD JSON REPORT
       # =========================================
 
       - name: Upload Trivy JSON
@@ -226,6 +212,7 @@ jobs:
           HIGH=$(jq '[.Results[].Vulnerabilities[]? | select(.Severity=="HIGH")] | length' trivy.json)
 
           echo "CRITICAL: $CRITICAL"
+
           echo "HIGH: $HIGH"
 
           if [ "$CRITICAL" -gt 0 ] || [ "$HIGH" -gt 0 ]; then
@@ -307,25 +294,6 @@ jobs:
           Path("README.md").write_text(readme)
 
           EOF
-
-  # =========================================
-  # COMMIT README
-  # =========================================
-
-  commit-readme:
-    name: Commit README
-
-    needs: update-readme
-
-    runs-on: ubuntu-latest
-
-    permissions:
-      contents: write
-
-    steps:
-
-      - name: Checkout Repository
-        uses: actions/checkout@v4
 
       - name: Commit README Changes
         run: |
