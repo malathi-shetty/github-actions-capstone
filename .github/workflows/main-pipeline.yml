@@ -66,9 +66,32 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Ensure docs folder exists
+      - name: Create docs folder
+        run: mkdir -p docs
+
+      - name: Generate Dashboard (Echo Based)
         run: |
-          mkdir -p docs
+          echo "<!DOCTYPE html>" > docs/index.html
+          echo "<html>" >> docs/index.html
+          echo "<head><title>DevSecOps Dashboard</title></head>" >> docs/index.html
+          echo "<body>" >> docs/index.html
+
+          echo "<h1>🚀 CI/CD Live Dashboard</h1>" >> docs/index.html
+
+          echo "<p><b>Image:</b> v1.0.${{ github.run_number }}-${{ github.sha }}</p>" >> docs/index.html
+          echo "<p><b>Version:</b> v1.0.${{ github.run_number }}</p>" >> docs/index.html
+          echo "<p><b>Commit:</b> ${{ github.sha }}</p>" >> docs/index.html
+          echo "<p><b>Time:</b> $(date -u)</p>" >> docs/index.html
+
+          echo "<h2>Pipeline Status</h2>" >> docs/index.html
+          echo "<ul>" >> docs/index.html
+          echo "<li>Build → Success</li>" >> docs/index.html
+          echo "<li>Docker → Success</li>" >> docs/index.html
+          echo "<li>Trivy → Completed</li>" >> docs/index.html
+          echo "</ul>" >> docs/index.html
+
+          echo "</body>" >> docs/index.html
+          echo "</html>" >> docs/index.html
 
       - name: Deploy Pages
         uses: peaceiris/actions-gh-pages@v3
