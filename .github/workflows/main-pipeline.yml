@@ -59,6 +59,10 @@ jobs:
 
     steps:
 
+      # =========================================
+      # INSTALL TRIVY
+      # =========================================
+
       - name: Install Trivy
         run: |
 
@@ -81,6 +85,10 @@ jobs:
           sudo apt-get update
 
           sudo apt-get install -y trivy
+
+      # =========================================
+      # VERIFY TRIVY
+      # =========================================
 
       - name: Verify Trivy
         run: trivy --version
@@ -169,6 +177,18 @@ jobs:
           echo "- Docker image built and pushed" >> ai.md
           echo "- Trivy scan completed" >> ai.md
           echo "- README auto updated" >> ai.md
+
+      # =========================================
+      # ADD REPORT TO GITHUB SUMMARY
+      # =========================================
+
+      - name: Publish Security Summary
+        run: |
+
+          echo "## 🔐 Trivy Security Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          cat trivy.md >> $GITHUB_STEP_SUMMARY
 
       # =========================================
       # UPLOAD REPORTS
@@ -294,6 +314,10 @@ jobs:
           Path("README.md").write_text(readme)
 
           EOF
+
+      # =========================================
+      # COMMIT README CHANGES
+      # =========================================
 
       - name: Commit README Changes
         run: |
