@@ -69,6 +69,16 @@ flowchart TD
 
 ----
 
+- name: Inject Trivy Table into README
+  run: |
+    if [ -f trivy.md ]; then
+      awk '
+      /<!-- TRIVY-TABLE-START -->/ {print; system("cat trivy.md"); skip=1; next}
+      /<!-- TRIVY-TABLE-END -->/ {skip=0}
+      !skip
+      ' README.md > tmp && mv tmp README.md
+    fi
+
 ## 🔐 Vulnerability Report (Trivy)
 
 <!-- TRIVY-TABLE-START -->
