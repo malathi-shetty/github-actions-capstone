@@ -162,35 +162,25 @@
 
     .workflow-item {
       display: flex;
-      justify-content: space-between;
+      flex-direction: column;
       align-items: center;
-      gap: 14px;
-      flex-wrap: wrap;
+      justify-content: center;
+      text-align: center;
+      gap: 12px;
       background: #f8fafc;
-      padding: 14px 16px;
-      border-radius: 16px;
+      padding: 18px;
+      border-radius: 18px;
     }
 
     .workflow-item span {
       font-weight: 600;
       color: #0f172a;
+      font-size: 1rem;
     }
 
     .workflow-item img {
       max-width: 100%;
       height: auto;
-    }
-
-    .docker-metrics {
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-      margin-top: 18px;
-    }
-
-    .docker-metrics img {
-      max-width: 100%;
-      width: fit-content;
     }
 
     .architecture {
@@ -276,16 +266,6 @@
 
       .arrow {
         transform: rotate(90deg);
-      }
-
-      .workflow-item {
-        flex-direction: column;
-        align-items: flex-start;
-      }
-
-      .workflow-item img,
-      .docker-metrics img {
-        max-width: 300px;
       }
 
     }
@@ -427,21 +407,25 @@
 
           <div class="workflow-item">
 
-            <span>PR Pipeline</span><br>
+            <span>PR Pipeline</span>
 
-            <a href="https://github.com/malathi-shetty/github-actions-capstone/actions/workflows/main-pipeline.yml"> &nbsp;&nbsp;&nbsp;
-    <img src="https://github.com/malathi-shetty/github-actions-capstone/actions/workflows/main-pipeline.yml/badge.svg" alt="Main Pipeline Status">
-  </a>
+            <a href="https://github.com/malathi-shetty/github-actions-capstone/actions/workflows/pr-pipeline.yml">
+              <img
+                src="https://github.com/malathi-shetty/github-actions-capstone/actions/workflows/pr-pipeline.yml/badge.svg"
+                alt="PR Pipeline Status">
+            </a>
 
           </div>
 
           <div class="workflow-item">
 
-            <span>Main Pipeline</span><br>
+            <span>Main Pipeline</span>
 
-           <a href="https://github.com/malathi-shetty/github-actions-capstone/actions/workflows/pr-pipeline.yml"> &nbsp;&nbsp;&nbsp;
-    <img src="https://github.com/malathi-shetty/github-actions-capstone/actions/workflows/pr-pipeline.yml/badge.svg" alt="PR Pipeline Status">
-  </a>
+            <a href="https://github.com/malathi-shetty/github-actions-capstone/actions/workflows/main-pipeline.yml">
+              <img
+                src="https://github.com/malathi-shetty/github-actions-capstone/actions/workflows/main-pipeline.yml/badge.svg"
+                alt="Main Pipeline Status">
+            </a>
 
           </div>
 
@@ -450,26 +434,42 @@
             <span>Health Check</span>
 
             <a href="https://github.com/malathi-shetty/github-actions-capstone/actions/workflows/health-check.yml">
-    <img src="https://github.com/malathi-shetty/github-actions-capstone/actions/workflows/health-check.yml/badge.svg" alt="Health Check Status">
-  </a>
+              <img
+                src="https://github.com/malathi-shetty/github-actions-capstone/actions/workflows/health-check.yml/badge.svg"
+                alt="Health Check Status">
+            </a>
 
           </div>
 
         </div>
 
-        
+        <h2 style="margin-top:28px;">Docker Metrics</h2>
 
-        <h2>Docker Metrics</h2>
+        <div class="workflow-list">
 
-        <div class="docker-metrics">
+          <div class="workflow-item">
 
-           <a href="https://hub.docker.com/repository/docker/shettymalathi113/github-actions-capstone"> &nbsp;&nbsp;&nbsp;
-    <img src="https://img.shields.io/docker/image-size/shettymalathi113/github-actions-capstone/latest" alt="Image Size">
-  </a>
+            <span>Docker Image Size</span>
 
-  <a href="https://hub.docker.com/repository/docker/shettymalathi113/github-actions-capstone">  &nbsp;&nbsp;&nbsp;
-    <img src="https://img.shields.io/docker/pulls/shettymalathi113/github-actions-capstone.svg" alt="App Pulls">
-  </a>
+            <a href="https://hub.docker.com/repository/docker/shettymalathi113/github-actions-capstone">
+              <img
+                src="https://img.shields.io/docker/image-size/shettymalathi113/github-actions-capstone/latest"
+                alt="Docker Image Size">
+            </a>
+
+          </div>
+
+          <div class="workflow-item">
+
+            <span>Docker Pulls</span>
+
+            <a href="https://hub.docker.com/repository/docker/shettymalathi113/github-actions-capstone">
+              <img
+                src="https://img.shields.io/docker/pulls/shettymalathi113/github-actions-capstone.svg"
+                alt="Docker Pulls">
+            </a>
+
+          </div>
 
         </div>
 
