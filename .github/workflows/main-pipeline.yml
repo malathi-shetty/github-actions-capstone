@@ -8,12 +8,11 @@ on:
 permissions:
   contents: write
 
-
 jobs:
 
-# ─────────────────────────────
-# 1. BUILD & TEST
-# ─────────────────────────────
+  # ─────────────────────────────
+  # 1. BUILD & TEST
+  # ─────────────────────────────
   build-test:
     name: Build & Test
     uses: ./.github/workflows/reusable-build-test.yml
@@ -21,10 +20,9 @@ jobs:
       node_version: "20"
       run_tests: true
 
-
-# ─────────────────────────────
-# 2. DOCKER + TRIVY
-# ─────────────────────────────
+  # ─────────────────────────────
+  # 2. DOCKER + TRIVY
+  # ─────────────────────────────
   docker:
     name: Docker + Trivy
     needs: build-test
@@ -38,10 +36,9 @@ jobs:
       docker_username: ${{ secrets.DOCKER_USERNAME }}
       docker_token: ${{ secrets.DOCKER_TOKEN }}
 
-
-# ─────────────────────────────
-# 3. DEPLOY
-# ─────────────────────────────
+  # ─────────────────────────────
+  # 3. DEPLOY
+  # ─────────────────────────────
   deploy:
     name: Deploy
     needs: docker
@@ -54,10 +51,9 @@ jobs:
           echo "Deploying..."
           echo "Health check passed"
 
-
-# ─────────────────────────────
-# 4. GITHUB PAGES DEPLOY
-# ─────────────────────────────
+  # ─────────────────────────────
+  # 4. GITHUB PAGES DEPLOY
+  # ─────────────────────────────
   deploy-pages:
     name: Deploy GitHub Pages Dashboard
     needs: docker
@@ -98,17 +94,13 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: docs
 
-
-# ─────────────────────────────
-# 5. VERSION TAGGING
-# ─────────────────────────────
+  # ─────────────────────────────
+  # 5. VERSION TAGGING
+  # ─────────────────────────────
   versioning:
     name: Create Git Tag
     needs: deploy
     runs-on: ubuntu-latest
-
-    permissions:
-      contents: write
 
     steps:
       - uses: actions/checkout@v4
@@ -122,10 +114,9 @@ jobs:
           git tag v1.0.${GITHUB_RUN_NUMBER}
           git push origin v1.0.${GITHUB_RUN_NUMBER}
 
-
-# ─────────────────────────────
-# 6. SAVE STATUS
-# ─────────────────────────────
+  # ─────────────────────────────
+  # 6. SAVE STATUS
+  # ─────────────────────────────
   docker-status:
     name: Save Docker Status
     needs: docker
@@ -143,10 +134,9 @@ jobs:
           name: docker-status
           path: docker-status.txt
 
-
-# ─────────────────────────────
-# 7. AI RELEASE NOTES (OPENAI)
-# ─────────────────────────────
+  # ─────────────────────────────
+  # 7. AI RELEASE NOTES
+  # ─────────────────────────────
   ai-release:
     name: AI Release Notes
     needs: docker
@@ -188,12 +178,11 @@ jobs:
 
       - name: Inject AI into README
         run: |
-          sed -i '/<!-- AI-START -->/,/<!-- AI-END -->/c\
-          <!-- AI-START -->\
-          ## 🤖 AI Release Notes\
-          \
-          '"$(cat ai.md)"'\
-          <!-- AI-END -->' README.md
+          awk '
+          /<!-- AI-START -->/ {print; system("cat ai.md"); skip=1; next}
+          /<!-- AI-END -->/ {skip=0}
+          !skip
+          ' README.md > tmp && mv tmp README.md
 
       - name: Commit README
         run: |
