@@ -74,3 +74,54 @@ Git Tag Release
 Deploy
       ↓
 README Auto Update
+
+------
+
+- name: Generate AI Release Notes
+  run: |
+    SHORT_SHA=$(echo $GITHUB_SHA | cut -c1-7)
+    TIME=$(date -u)
+
+    echo "## 🚀 AI DevSecOps Release Notes" > release.md
+    echo "" >> release.md
+    echo "### 🧠 Summary" >> release.md
+    echo "- Pipeline executed successfully" >> release.md
+    echo "- Security scanning completed via Trivy" >> release.md
+    echo "- Docker image built and deployed" >> release.md
+    echo "" >> release.md
+
+    echo "### 📦 Build Info" >> release.md
+    echo "- Image: ${{ needs.docker.outputs.image_url }}" >> release.md
+    echo "- Commit: $SHORT_SHA" >> release.md
+    echo "- Version: v1.0.${GITHUB_RUN_NUMBER}" >> release.md
+    echo "- Timestamp (UTC): $TIME" >> release.md
+    echo "- Deployment Time (UTC): $(date -u)" >> release.md
+
+    - name: Generate AI Release Notes (OpenAI)
+  env:
+    OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+  run: |
+    SHORT_SHA=$(echo $GITHUB_SHA | cut -c1-7)
+
+    RESPONSE=$(curl -s https://api.openai.com/v1/chat/completions \
+      -H "Authorization: Bearer $OPENAI_API_KEY" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "model": "gpt-4o-mini",
+        "messages": [
+          {
+            "role": "system",
+            "content": "You are a DevSecOps release notes generator."
+          },
+          {
+            "role": "user",
+            "content": "Generate professional release notes for a CI/CD pipeline. Include build, docker, security scan, commit '"$SHORT_SHA"' and version v1.0.'"${GITHUB_RUN_NUMBER}"'. Keep it concise and professional."
+          }
+        ]
+      }')
+
+    echo "$RESPONSE" > ai_response.json
+
+    echo "## 🤖 AI Release Notes" > release.md
+    echo "" >> release.md
+    echo "$RESPONSE" >> release.md
