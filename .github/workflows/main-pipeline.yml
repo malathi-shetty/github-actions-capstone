@@ -65,17 +65,21 @@ jobs:
           echo "Success"
 
   # =========================================
-  # INSTALL TRIVY
+  # RUN TRIVY SCAN
   # =========================================
 
-  install-trivy:
-    name: Install Trivy
+  trivy-scan:
+    name: Run Trivy Scan
 
     needs: docker
 
     runs-on: ubuntu-latest
 
     steps:
+
+      # =========================================
+      # INSTALL TRIVY
+      # =========================================
 
       - name: Install Trivy
         run: |
@@ -100,18 +104,16 @@ jobs:
 
           sudo apt-get install -y trivy
 
-  # =========================================
-  # RUN TRIVY SCAN
-  # =========================================
+      # =========================================
+      # VERIFY TRIVY
+      # =========================================
 
-  trivy-scan:
-    name: Run Trivy Scan
+      - name: Verify Trivy
+        run: trivy --version
 
-    needs: install-trivy
-
-    runs-on: ubuntu-latest
-
-    steps:
+      # =========================================
+      # RUN TRIVY SCAN
+      # =========================================
 
       - name: Run Trivy Scan
         run: |
@@ -122,6 +124,10 @@ jobs:
             --format json \
             --output trivy.json \
             shettymalathi113/github-actions-capstone:v1.0.${{ github.run_number }}
+
+      # =========================================
+      # UPLOAD JSON
+      # =========================================
 
       - name: Upload Trivy JSON
         uses: actions/upload-artifact@v4
