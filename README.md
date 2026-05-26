@@ -54,6 +54,11 @@ Build → Test → Docker → Scan → Tag → Deploy
 ## 🔐 Vulnerability Report (Trivy)
 
 <!-- TRIVY-TABLE-START -->
+## 🔐 Vulnerability Report (Trivy)
+
+| Severity | Package | Vulnerability | Installed Version | Fixed Version |
+|---|---|---|---|---|
+
 <!-- TRIVY-TABLE-END -->
 
 This section is automatically updated by CI/CD pipeline using Trivy scan results.
@@ -63,6 +68,13 @@ This section is automatically updated by CI/CD pipeline using Trivy scan results
 ## 🤖 AI Release Notes
 
 <!-- AI-START -->
+## 🤖 AI Release Notes
+
+- Build completed successfully
+- Docker image built and pushed
+- Trivy scan completed
+- README auto updated
+
 <!-- AI-END -->
 
 ## 🧱 CI/CD Architecture (Visual Flow)
