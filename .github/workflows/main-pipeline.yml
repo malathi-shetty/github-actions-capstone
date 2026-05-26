@@ -3,12 +3,13 @@ name: Main Pipeline
 on:
   push:
     branches:
-      - test-trivy-vulns
+      - main
 
   workflow_dispatch:
 
 permissions:
   contents: write
+  security-events: write
 
 jobs:
 
@@ -26,7 +27,7 @@ jobs:
       run_tests: true
 
   # =========================================
-  # DOCKER BUILD + PUSH
+  # DOCKER BUILD
   # =========================================
 
   docker:
@@ -47,7 +48,7 @@ jobs:
       docker_token: ${{ secrets.DOCKER_TOKEN }}
 
   # =========================================
-  # RUN TRIVY SCAN
+  # TRIVY SECURITY SCAN
   # =========================================
 
   trivy-scan:
@@ -57,7 +58,18 @@ jobs:
 
     runs-on: ubuntu-latest
 
+    permissions:
+      contents: read
+      security-events: write
+
     steps:
+
+      # =========================================
+      # CHECKOUT
+      # =========================================
+
+      - name: Checkout Repository
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
       # =========================================
       # INSTALL TRIVY
@@ -94,27 +106,54 @@ jobs:
         run: trivy --version
 
       # =========================================
-      # RUN TRIVY SCAN
+      # SHOW VULNERABILITIES IN LOGS
       # =========================================
 
       - name: Run Trivy Scan
         run: |
 
-          echo "Running Trivy vulnerability scan..."
-
-          # Show vulnerabilities in logs
           trivy image \
             --severity HIGH,CRITICAL \
             --ignore-unfixed \
             shettymalathi113/github-actions-capstone:v1.0.${{ github.run_number }}
 
-          # Save JSON report
+      # =========================================
+      # GENERATE JSON REPORT
+      # =========================================
+
+      - name: Generate Trivy JSON Report
+        run: |
+
           trivy image \
             --severity HIGH,CRITICAL \
             --ignore-unfixed \
             --format json \
             --output trivy.json \
             shettymalathi113/github-actions-capstone:v1.0.${{ github.run_number }}
+
+      # =========================================
+      # GENERATE SARIF REPORT
+      # =========================================
+
+      - name: Generate SARIF Report
+        run: |
+
+          trivy image \
+            --severity HIGH,CRITICAL \
+            --ignore-unfixed \
+            --format sarif \
+            --output trivy-results.sarif \
+            shettymalathi113/github-actions-capstone:v1.0.${{ github.run_number }}
+
+      # =========================================
+      # UPLOAD SARIF TO GITHUB SECURITY TAB
+      # =========================================
+
+      - name: Upload SARIF Report
+        uses: github/codeql-action/upload-sarif@v3
+
+        with:
+          sarif_file: trivy-results.sarif
 
       # =========================================
       # UPLOAD JSON REPORT
@@ -126,6 +165,17 @@ jobs:
         with:
           name: trivy-json
           path: trivy.json
+
+      # =========================================
+      # UPLOAD SARIF ARTIFACT
+      # =========================================
+
+      - name: Upload SARIF Artifact
+        uses: actions/upload-artifact@v4
+
+        with:
+          name: trivy-sarif
+          path: trivy-results.sarif
 
   # =========================================
   # GENERATE REPORTS
@@ -147,7 +197,7 @@ jobs:
           name: trivy-json
 
       # =========================================
-      # GENERATE TRIVY MARKDOWN
+      # GENERATE MARKDOWN REPORT
       # =========================================
 
       - name: Generate Trivy Markdown
@@ -171,24 +221,13 @@ jobs:
       - name: Generate AI Notes
         run: |
 
-          echo "## 🤖 AI Release Notes" > ai.md
+          echo "## 🤖 AI Security Notes" > ai.md
           echo "" >> ai.md
           echo "- Build completed successfully" >> ai.md
-          echo "- Docker image built and pushed" >> ai.md
-          echo "- Trivy scan completed" >> ai.md
-          echo "- README auto updated" >> ai.md
-
-      # =========================================
-      # ADD REPORT TO GITHUB SUMMARY
-      # =========================================
-
-      - name: Publish Security Summary
-        run: |
-
-          echo "## 🔐 Trivy Security Report" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-
-          cat trivy.md >> $GITHUB_STEP_SUMMARY
+          echo "- Docker image built successfully" >> ai.md
+          echo "- Trivy vulnerability scan completed" >> ai.md
+          echo "- Security reports generated" >> ai.md
+          echo "- SARIF uploaded to GitHub Security tab" >> ai.md
 
       # =========================================
       # UPLOAD REPORTS
@@ -204,6 +243,7 @@ jobs:
             trivy.md
             ai.md
             trivy.json
+            trivy-results.sarif
 
   # =========================================
   # SECURITY GATE
@@ -224,6 +264,10 @@ jobs:
         with:
           name: reports
 
+      # =========================================
+      # FAIL PIPELINE IF VULNERABILITIES FOUND
+      # =========================================
+
       - name: Fail Build If Vulnerabilities Found
         run: |
 
@@ -234,6 +278,16 @@ jobs:
           echo "CRITICAL: $CRITICAL"
 
           echo "HIGH: $HIGH"
+
+          echo ""
+          echo "==============================="
+          echo " Vulnerability Summary"
+          echo "==============================="
+
+          jq -r '
+          .Results[]?.Vulnerabilities[]? |
+          "Severity: \(.Severity)\nPackage: \(.PkgName)\nCVE: \(.VulnerabilityID)\nInstalled: \(.InstalledVersion)\nFixed: \(.FixedVersion // "N/A")\n"
+          ' trivy.json
 
           if [ "$CRITICAL" -gt 0 ] || [ "$HIGH" -gt 0 ]; then
             echo "HIGH or CRITICAL vulnerabilities found"
@@ -255,8 +309,8 @@ jobs:
 
       - name: Deploy App
         run: |
-          echo "Deploying IMAGE"
-          echo "Success"
+          echo "Deploying secure Docker image"
+          echo "Deployment successful"
 
   # =========================================
   # UPDATE README
@@ -275,13 +329,17 @@ jobs:
     steps:
 
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
       - name: Download Reports
         uses: actions/download-artifact@v4
 
         with:
           name: reports
+
+      # =========================================
+      # UPDATE README
+      # =========================================
 
       - name: Update README
         run: |
@@ -315,9 +373,24 @@ jobs:
 
           EOF
 
-      # =========================================
-      # COMMIT README CHANGES
-      # =========================================
+  # =========================================
+  # COMMIT README
+  # =========================================
+
+  commit-readme:
+    name: Commit README
+
+    needs: update-readme
+
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+
+      - name: Checkout Repository
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
       - name: Commit README Changes
         run: |
