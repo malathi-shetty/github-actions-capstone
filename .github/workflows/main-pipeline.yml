@@ -21,7 +21,7 @@ jobs:
       run_tests: true
 
   # ─────────────────────────────
-  # 2. DOCKER (NO TRIVY HERE)
+  # 2. DOCKER BUILD (NO TRIVY HERE)
   # ─────────────────────────────
   docker:
     name: Docker Build
@@ -67,29 +67,23 @@ jobs:
 
       - name: Generate Dashboard
         run: |
-          cat <<EOF > docs/index.html
-<!DOCTYPE html>
-<html>
-<head><title>DevSecOps Dashboard</title></head>
-<body>
+          echo "<!DOCTYPE html>" > docs/index.html
+          echo "<html><head><title>DevSecOps Dashboard</title></head><body>" >> docs/index.html
 
-<h1>🚀 CI/CD Live Dashboard</h1>
+          echo "<h1>🚀 CI/CD Live Dashboard</h1>" >> docs/index.html
+          echo "<p><b>Image:</b> v1.0.${{ github.run_number }}-${{ github.sha }}</p>" >> docs/index.html
+          echo "<p><b>Version:</b> v1.0.${{ github.run_number }}</p>" >> docs/index.html
+          echo "<p><b>Commit:</b> ${{ github.sha }}</p>" >> docs/index.html
+          echo "<p><b>Time:</b> $(date -u)</p>" >> docs/index.html
 
-<p><b>Image:</b> v1.0.${{ github.run_number }}-${{ github.sha }}</p>
-<p><b>Version:</b> v1.0.${{ github.run_number }}</p>
-<p><b>Commit:</b> ${{ github.sha }}</p>
-<p><b>Time:</b> $(date -u)</p>
+          echo "<h2>Pipeline Status</h2>" >> docs/index.html
+          echo "<ul>" >> docs/index.html
+          echo "<li>Build → Success</li>" >> docs/index.html
+          echo "<li>Docker → Success</li>" >> docs/index.html
+          echo "<li>Trivy → Done</li>" >> docs/index.html
+          echo "</ul>" >> docs/index.html
 
-<h2>Pipeline Status</h2>
-<ul>
-<li>Build → Success</li>
-<li>Docker → Success</li>
-<li>Deploy → Success</li>
-</ul>
-
-</body>
-</html>
-EOF
+          echo "</body></html>" >> docs/index.html
 
       - name: Deploy Pages
         uses: peaceiris/actions-gh-pages@v3
@@ -138,10 +132,10 @@ EOF
           path: docker-status.txt
 
   # ─────────────────────────────
-  # 7. AI RELEASE NOTES + TRIVY (NOW IN MAIN)
+  # 7. AI + TRIVY (FIXED)
   # ─────────────────────────────
   ai-release:
-    name: AI + Trivy Reports
+    name: AI Release Notes + Trivy
     needs: docker
     runs-on: ubuntu-latest
     permissions:
@@ -189,7 +183,7 @@ EOF
           echo "$AI_TEXT" >> ai.md
 
       # ─────────────────────────────
-      # TRIVY (NOW HERE - FIXED)
+      # TRIVY SCAN (REAL FIX)
       # ─────────────────────────────
       - name: Run Trivy Scan
         run: |
@@ -214,18 +208,21 @@ EOF
           fi
 
       # ─────────────────────────────
-      # UPDATE README SAFELY
+      # UPDATE README
       # ─────────────────────────────
       - name: Update README
         run: |
           awk '
-          /<!-- AI-START -->/ {print; system("cat ai.md"); skip=1; next}
-          /<!-- AI-END -->/ {skip=0}
+          /<!-- AI-START -->/ {print; system("cat ai.md"); skip1=1; next}
+          /<!-- AI-END -->/ {skip1=0}
           /<!-- TRIVY-TABLE-START -->/ {print; system("cat trivy.md"); skip2=1; next}
           /<!-- TRIVY-TABLE-END -->/ {skip2=0}
-          !skip && !skip2
+          !skip1 && !skip2
           ' README.md > tmp && mv tmp README.md
 
+      # ─────────────────────────────
+      # COMMIT README
+      # ─────────────────────────────
       - name: Commit README
         run: |
           git config user.name "github-actions"
