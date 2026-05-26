@@ -3,7 +3,6 @@ name: Main Pipeline
 on:
   push:
     branches:
-      #- main
       - test-trivy-vulns
 
   workflow_dispatch:
@@ -46,24 +45,6 @@ jobs:
     secrets:
       docker_username: ${{ secrets.DOCKER_USERNAME }}
       docker_token: ${{ secrets.DOCKER_TOKEN }}
-
-  # =========================================
-  # DEPLOY
-  # =========================================
-
-  deploy:
-    name: Deploy
-
-    needs: security-gate
-
-    runs-on: ubuntu-latest
-
-    steps:
-
-      - name: Deploy App
-        run: |
-          echo "Deploying IMAGE"
-          echo "Success"
 
   # =========================================
   # RUN TRIVY SCAN
@@ -125,6 +106,21 @@ jobs:
             --format json \
             --output trivy.json \
             shettymalathi113/github-actions-capstone:v1.0.${{ github.run_number }}
+
+      # =========================================
+      # SHOW CVEs IN LOGS
+      # =========================================
+
+      - name: Show Vulnerabilities
+        run: |
+
+          echo "Detected Vulnerabilities:"
+          echo ""
+
+          jq -r '
+          .Results[]?.Vulnerabilities[]? |
+          "\(.VulnerabilityID) | \(.Severity) | \(.PkgName) | Installed: \(.InstalledVersion)"
+          ' trivy.json
 
       # =========================================
       # UPLOAD JSON
@@ -230,13 +226,30 @@ jobs:
           HIGH=$(jq '[.Results[].Vulnerabilities[]? | select(.Severity=="HIGH")] | length' trivy.json)
 
           echo "CRITICAL: $CRITICAL"
-
           echo "HIGH: $HIGH"
 
           if [ "$CRITICAL" -gt 0 ] || [ "$HIGH" -gt 0 ]; then
             echo "HIGH or CRITICAL vulnerabilities found"
             exit 1
           fi
+
+  # =========================================
+  # DEPLOY
+  # =========================================
+
+  deploy:
+    name: Deploy
+
+    needs: security-gate
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Deploy App
+        run: |
+          echo "Deploying IMAGE"
+          echo "Success"
 
   # =========================================
   # UPDATE README
