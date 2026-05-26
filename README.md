@@ -21,9 +21,9 @@ Node.js app with full CI/CD + security pipeline.
 
 - Build: success
 - Docker: Success
-- Image: v1.0.72-82a6d24
-- Version: v1.0.72
-- Commit: 82a6d24
+- Image: v1.0.70-15c5263
+- Version: v1.0.70
+- Commit: 15c5263
 
 ## 🔐 Security
 - Trivy Scan: CRITICAL/HIGH enforced
@@ -65,59 +65,23 @@ flowchart TD
     F --> G[Git Tag Release]
     G --> H[Deploy]
     H --> I[README Auto Update]
-````
+```
 
 ---
 
-## 🤖 AI RELEASE NOTES (GITHUB ACTION STEP)
+## 🤖 AI Release Notes
 
-```yaml
-- name: Generate AI Release Notes
-  run: |
-    SHORT_SHA=$(echo $GITHUB_SHA | cut -c1-7)
-    TIME=$(date -u)
+> Automatically generated using OpenAI during CI/CD execution
 
-    echo "## 🚀 AI DevSecOps Release Notes" > release.md
-    echo "" >> release.md
-    echo "### 🧠 Summary" >> release.md
-    echo "- Pipeline executed successfully" >> release.md
-    echo "- Security scanning completed via Trivy" >> release.md
-    echo "- Docker image built and deployed" >> release.md
-    echo "" >> release.md
+- Pipeline Summary: AI-generated per build
+- Commit: Dynamic per run
+- Version: Auto incremented
+- Security: Trivy validated
+- Status: Production-ready deployment
 
-    echo "### 📦 Build Info" >> release.md
-    echo "- Image: ${{ needs.docker.outputs.image_url }}" >> release.md
-    echo "- Commit: $SHORT_SHA" >> release.md
-    echo "- Version: v1.0.${GITHUB_RUN_NUMBER}" >> release.md
-    echo "- Timestamp (UTC): $TIME" >> release.md
+<!-- AI-START -->
+AUTO-INJECTED CONTENT HERE
+<!-- AI-END -->
 
-- name: Generate AI Release Notes (OpenAI)
-  env:
-    OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-  run: |
-    SHORT_SHA=$(echo $GITHUB_SHA | cut -c1-7)
 
-    RESPONSE=$(curl -s https://api.openai.com/v1/chat/completions \
-      -H "Authorization: Bearer $OPENAI_API_KEY" \
-      -H "Content-Type: application/json" \
-      -d "{
-        \"model\": \"gpt-4o-mini\",
-        \"messages\": [
-          {
-            \"role\": \"system\",
-            \"content\": \"You are a DevSecOps release notes generator.\"
-          },
-          {
-            \"role\": \"user\",
-            \"content\": \"Generate professional release notes for CI/CD pipeline. Commit $SHORT_SHA Version v1.0.${GITHUB_RUN_NUMBER}\"
-          }
-        ]
-      }")
-
-    echo "$RESPONSE" > ai_response.json
-
-    echo "## 🤖 AI Release Notes" > release.md
-    echo "" >> release.md
-    echo "$RESPONSE" >> release.md
-```
 
