@@ -65,31 +65,17 @@ jobs:
           echo "Success"
 
   # =========================================
-  # AI + TRIVY SECURITY REPORT
+  # INSTALL TRIVY
   # =========================================
 
-  ai-trivy:
-    name: AI + Trivy Report
+  install-trivy:
+    name: Install Trivy
 
     needs: docker
 
     runs-on: ubuntu-latest
 
-    permissions:
-      contents: write
-
     steps:
-
-      # =========================================
-      # CHECKOUT
-      # =========================================
-
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      # =========================================
-      # INSTALL TRIVY
-      # =========================================
 
       - name: Install Trivy
         run: |
@@ -114,9 +100,18 @@ jobs:
 
           sudo apt-get install -y trivy
 
-      # =========================================
-      # RUN TRIVY SCAN
-      # =========================================
+  # =========================================
+  # RUN TRIVY SCAN
+  # =========================================
+
+  trivy-scan:
+    name: Run Trivy Scan
+
+    needs: install-trivy
+
+    runs-on: ubuntu-latest
+
+    steps:
 
       - name: Run Trivy Scan
         run: |
@@ -127,6 +122,32 @@ jobs:
             --format json \
             --output trivy.json \
             shettymalathi113/github-actions-capstone:v1.0.${{ github.run_number }}
+
+      - name: Upload Trivy JSON
+        uses: actions/upload-artifact@v4
+
+        with:
+          name: trivy-json
+          path: trivy.json
+
+  # =========================================
+  # GENERATE REPORTS
+  # =========================================
+
+  generate-reports:
+    name: Generate Reports
+
+    needs: trivy-scan
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Download Trivy JSON
+        uses: actions/download-artifact@v4
+
+        with:
+          name: trivy-json
 
       # =========================================
       # GENERATE TRIVY MARKDOWN
@@ -161,25 +182,38 @@ jobs:
           echo "- README auto updated" >> ai.md
 
       # =========================================
-      # UPLOAD ARTIFACTS
+      # UPLOAD REPORTS
       # =========================================
 
-      - name: Upload Trivy Reports
-        if: always()
-
+      - name: Upload Reports
         uses: actions/upload-artifact@v4
 
         with:
-          name: trivy-reports
+          name: reports
 
           path: |
-            trivy.json
             trivy.md
             ai.md
+            trivy.json
 
-      # =========================================
-      # FAIL PIPELINE IF VULNERABILITIES FOUND
-      # =========================================
+  # =========================================
+  # SECURITY GATE
+  # =========================================
+
+  security-gate:
+    name: Security Gate
+
+    needs: generate-reports
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Download Reports
+        uses: actions/download-artifact@v4
+
+        with:
+          name: reports
 
       - name: Fail Build If Vulnerabilities Found
         run: |
@@ -189,6 +223,7 @@ jobs:
           HIGH=$(jq '[.Results[].Vulnerabilities[]? | select(.Severity=="HIGH")] | length' trivy.json)
 
           echo "CRITICAL: $CRITICAL"
+
           echo "HIGH: $HIGH"
 
           if [ "$CRITICAL" -gt 0 ] || [ "$HIGH" -gt 0 ]; then
@@ -196,9 +231,30 @@ jobs:
             exit 1
           fi
 
-      # =========================================
-      # UPDATE README
-      # =========================================
+  # =========================================
+  # UPDATE README
+  # =========================================
+
+  update-readme:
+    name: Update README
+
+    needs: security-gate
+
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Download Reports
+        uses: actions/download-artifact@v4
+
+        with:
+          name: reports
 
       - name: Update README
         run: |
@@ -232,9 +288,24 @@ jobs:
 
           EOF
 
-      # =========================================
-      # COMMIT README
-      # =========================================
+  # =========================================
+  # COMMIT README
+  # =========================================
+
+  commit-readme:
+    name: Commit README
+
+    needs: update-readme
+
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
       - name: Commit README Changes
         run: |
