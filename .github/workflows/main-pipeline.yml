@@ -21,10 +21,10 @@ jobs:
       run_tests: true
 
   # ─────────────────────────────
-  # 2. DOCKER + TRIVY
+  # 2. DOCKER (NO TRIVY HERE)
   # ─────────────────────────────
   docker:
-    name: Docker + Trivy
+    name: Docker Build
     needs: build-test
     uses: ./.github/workflows/reusable-docker.yml
     with:
@@ -52,7 +52,7 @@ jobs:
           echo "Health check passed"
 
   # ─────────────────────────────
-  # 4. GITHUB PAGES DEPLOY
+  # 4. GITHUB PAGES
   # ─────────────────────────────
   deploy-pages:
     name: Deploy GitHub Pages Dashboard
@@ -67,23 +67,29 @@ jobs:
 
       - name: Generate Dashboard
         run: |
-          echo "<!DOCTYPE html>" > docs/index.html
-          echo "<html><head><title>DevSecOps Dashboard</title></head><body>" >> docs/index.html
+          cat <<EOF > docs/index.html
+<!DOCTYPE html>
+<html>
+<head><title>DevSecOps Dashboard</title></head>
+<body>
 
-          echo "<h1>🚀 CI/CD Live Dashboard</h1>" >> docs/index.html
-          echo "<p><b>Image:</b> v1.0.${{ github.run_number }}-${{ github.sha }}</p>" >> docs/index.html
-          echo "<p><b>Version:</b> v1.0.${{ github.run_number }}</p>" >> docs/index.html
-          echo "<p><b>Commit:</b> ${{ github.sha }}</p>" >> docs/index.html
-          echo "<p><b>Time:</b> $(date -u)</p>" >> docs/index.html
+<h1>🚀 CI/CD Live Dashboard</h1>
 
-          echo "<h2>Pipeline Status</h2>" >> docs/index.html
-          echo "<ul>" >> docs/index.html
-          echo "<li>Build → Success</li>" >> docs/index.html
-          echo "<li>Docker → Success</li>" >> docs/index.html
-          echo "<li>Trivy → Completed</li>" >> docs/index.html
-          echo "</ul>" >> docs/index.html
+<p><b>Image:</b> v1.0.${{ github.run_number }}-${{ github.sha }}</p>
+<p><b>Version:</b> v1.0.${{ github.run_number }}</p>
+<p><b>Commit:</b> ${{ github.sha }}</p>
+<p><b>Time:</b> $(date -u)</p>
 
-          echo "</body></html>" >> docs/index.html
+<h2>Pipeline Status</h2>
+<ul>
+<li>Build → Success</li>
+<li>Docker → Success</li>
+<li>Deploy → Success</li>
+</ul>
+
+</body>
+</html>
+EOF
 
       - name: Deploy Pages
         uses: peaceiris/actions-gh-pages@v3
@@ -132,10 +138,10 @@ jobs:
           path: docker-status.txt
 
   # ─────────────────────────────
-  # 7. AI RELEASE NOTES + TRIVY TABLE
+  # 7. AI RELEASE NOTES + TRIVY (NOW IN MAIN)
   # ─────────────────────────────
   ai-release:
-    name: AI Release Notes
+    name: AI + Trivy Reports
     needs: docker
     runs-on: ubuntu-latest
     permissions:
@@ -145,7 +151,7 @@ jobs:
       - uses: actions/checkout@v4
 
       # ─────────────────────────────
-      # OPENAI RELEASE NOTES
+      # AI RELEASE NOTES
       # ─────────────────────────────
       - name: Generate AI Release Notes
         env:
@@ -183,18 +189,32 @@ jobs:
           echo "$AI_TEXT" >> ai.md
 
       # ─────────────────────────────
-      # TRIVY TABLE GENERATION
+      # TRIVY (NOW HERE - FIXED)
       # ─────────────────────────────
+      - name: Run Trivy Scan
+        run: |
+          trivy image \
+            --format json \
+            --output trivy.json \
+            --severity CRITICAL,HIGH \
+            shettymalathi113/github-actions-capstone:v1.0.${GITHUB_RUN_NUMBER}-${GITHUB_SHA}
+
       - name: Generate Trivy Table
         run: |
           echo "## 🔐 Vulnerability Report (Trivy)" > trivy.md
           echo "" >> trivy.md
           echo "| Severity | Package | Vulnerability | Status |" >> trivy.md
           echo "|----------|---------|---------------|--------|" >> trivy.md
-          echo "| No scan data yet | - | - | - |" >> trivy.md
+
+          if [ -f trivy.json ]; then
+            jq -r '.Results[]?.Vulnerabilities[]? |
+            "| \(.Severity) | \(.PkgName) | \(.VulnerabilityID) | \(.Status) |"' trivy.json >> trivy.md
+          else
+            echo "| No vulnerabilities found | - | - | - |" >> trivy.md
+          fi
 
       # ─────────────────────────────
-      # UPDATE README (AI + TRIVY)
+      # UPDATE README SAFELY
       # ─────────────────────────────
       - name: Update README
         run: |
@@ -206,9 +226,6 @@ jobs:
           !skip && !skip2
           ' README.md > tmp && mv tmp README.md
 
-      # ─────────────────────────────
-      # COMMIT CHANGES
-      # ─────────────────────────────
       - name: Commit README
         run: |
           git config user.name "github-actions"
