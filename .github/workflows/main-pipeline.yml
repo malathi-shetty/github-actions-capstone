@@ -68,9 +68,7 @@ jobs:
       - name: Generate Dashboard
         run: |
           echo "<!DOCTYPE html>" > docs/index.html
-          echo "<html>" >> docs/index.html
-          echo "<head><title>DevSecOps Dashboard</title></head>" >> docs/index.html
-          echo "<body>" >> docs/index.html
+          echo "<html><head><title>DevSecOps Dashboard</title></head><body>" >> docs/index.html
 
           echo "<h1>🚀 CI/CD Live Dashboard</h1>" >> docs/index.html
           echo "<p><b>Image:</b> v1.0.${{ github.run_number }}-${{ github.sha }}</p>" >> docs/index.html
@@ -85,8 +83,7 @@ jobs:
           echo "<li>Trivy → Completed</li>" >> docs/index.html
           echo "</ul>" >> docs/index.html
 
-          echo "</body>" >> docs/index.html
-          echo "</html>" >> docs/index.html
+          echo "</body></html>" >> docs/index.html
 
       - name: Deploy Pages
         uses: peaceiris/actions-gh-pages@v3
@@ -135,7 +132,7 @@ jobs:
           path: docker-status.txt
 
   # ─────────────────────────────
-  # 7. AI RELEASE NOTES
+  # 7. AI RELEASE NOTES + TRIVY TABLE
   # ─────────────────────────────
   ai-release:
     name: AI Release Notes
@@ -147,10 +144,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Generate AI Release Notes (OpenAI)
+      # ─────────────────────────────
+      # OPENAI RELEASE NOTES
+      # ─────────────────────────────
+      - name: Generate AI Release Notes
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
+          set -e
+
           SHORT_SHA=$(echo $GITHUB_SHA | cut -c1-7)
 
           RESPONSE=$(curl -s https://api.openai.com/v1/chat/completions \
@@ -170,25 +172,48 @@ jobs:
               ]
             }")
 
-          AI_TEXT=$(echo "$RESPONSE" | jq -r '.choices[0].message.content')
+          AI_TEXT=$(echo "$RESPONSE" | jq -r '.choices[0].message.content // empty')
+
+          if [ -z "$AI_TEXT" ]; then
+            AI_TEXT="AI release notes unavailable"
+          fi
 
           echo "## 🤖 AI Release Notes" > ai.md
           echo "" >> ai.md
           echo "$AI_TEXT" >> ai.md
 
-      - name: Inject AI into README
+      # ─────────────────────────────
+      # TRIVY TABLE GENERATION
+      # ─────────────────────────────
+      - name: Generate Trivy Table
+        run: |
+          echo "## 🔐 Vulnerability Report (Trivy)" > trivy.md
+          echo "" >> trivy.md
+          echo "| Severity | Package | Vulnerability | Status |" >> trivy.md
+          echo "|----------|---------|---------------|--------|" >> trivy.md
+          echo "| No scan data yet | - | - | - |" >> trivy.md
+
+      # ─────────────────────────────
+      # UPDATE README (AI + TRIVY)
+      # ─────────────────────────────
+      - name: Update README
         run: |
           awk '
           /<!-- AI-START -->/ {print; system("cat ai.md"); skip=1; next}
           /<!-- AI-END -->/ {skip=0}
-          !skip
+          /<!-- TRIVY-TABLE-START -->/ {print; system("cat trivy.md"); skip2=1; next}
+          /<!-- TRIVY-TABLE-END -->/ {skip2=0}
+          !skip && !skip2
           ' README.md > tmp && mv tmp README.md
 
+      # ─────────────────────────────
+      # COMMIT CHANGES
+      # ─────────────────────────────
       - name: Commit README
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
           git add README.md
-          git commit -m "docs: update AI release notes" || exit 0
+          git commit -m "docs: update AI + Trivy report" || exit 0
           git pull --rebase origin main || true
           git push origin HEAD:main
