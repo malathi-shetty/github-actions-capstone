@@ -8,6 +8,7 @@ on:
 permissions:
   contents: write
 
+
 jobs:
 
 # ─────────────────────────────
@@ -55,7 +56,29 @@ jobs:
 
 
 # ─────────────────────────────
-# 4. VERSION TAGGING
+# 4. GITHUB PAGES DEPLOY
+# ─────────────────────────────
+  deploy-pages:
+    name: Deploy GitHub Pages Dashboard
+    needs: docker
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ensure docs folder exists
+        run: |
+          mkdir -p docs
+
+      - name: Deploy Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: docs
+
+
+# ─────────────────────────────
+# 5. VERSION TAGGING
 # ─────────────────────────────
   versioning:
     name: Create Git Tag
@@ -79,7 +102,7 @@ jobs:
 
 
 # ─────────────────────────────
-# 5. SAVE STATUS
+# 6. SAVE STATUS
 # ─────────────────────────────
   docker-status:
     name: Save Docker Status
@@ -100,7 +123,7 @@ jobs:
 
 
 # ─────────────────────────────
-# 6. README UPDATE (STABLE + NO ERRORS)
+# 7. README UPDATE (STABLE + SAFE)
 # ─────────────────────────────
   update-readme:
     name: AI Release Notes
@@ -124,12 +147,15 @@ jobs:
           echo "- Version: v1.0.${GITHUB_RUN_NUMBER}" >> release.md
           echo "- Commit: $SHORT_SHA" >> release.md
           echo "" >> release.md
+
           echo "## 🔐 Security" >> release.md
           echo "- Trivy Scan: CRITICAL/HIGH enforced" >> release.md
           echo "" >> release.md
+
           echo "## 📦 Flow" >> release.md
           echo "Build → Test → Docker → Scan → Tag → Deploy" >> release.md
           echo "" >> release.md
+
           echo "🚀 System is production ready" >> release.md
 
       - name: Replace CI Block in README
