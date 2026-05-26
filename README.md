@@ -88,11 +88,7 @@ Automatically generated using OpenAI during CI/CD execution
 - Status: Production-ready deployment
 
 <!-- AI-START -->
+## 🤖 AI Release Notes
 
-Automatically generated during CI/CD pipeline.
-
-Uses OpenAI GPT model  
-Summarizes build, docker, security, deployment  
-Updated on every release  
-
+null
 <!-- AI-END -->
