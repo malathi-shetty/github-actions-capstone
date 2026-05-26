@@ -9,7 +9,7 @@ on:
 
 permissions:
   contents: write
-  security-events: write
+  security-events: write   # REQUIRED for SARIF to appear in Security tab
 
 jobs:
 
@@ -59,7 +59,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-
       - name: Deploy App
         run: |
           echo "Deploying IMAGE"
@@ -117,10 +116,10 @@ jobs:
         run: trivy --version
 
       # =========================================
-      # RUN TRIVY SCAN
+      # JSON SCAN (FOR REPORTS)
       # =========================================
 
-      - name: Run Trivy Scan
+      - name: Run Trivy JSON Scan
         run: |
 
           trivy image \
@@ -131,10 +130,10 @@ jobs:
             shettymalathi113/github-actions-capstone:v1.0.${{ github.run_number }}
 
       # =========================================
-      # GENERATE SARIF REPORT
+      # SARIF SCAN (FOR GITHUB SECURITY TAB)
       # =========================================
 
-      - name: Generate SARIF Report
+      - name: Run Trivy SARIF Scan
         run: |
 
           trivy image \
@@ -148,30 +147,23 @@ jobs:
       # UPLOAD SARIF TO GITHUB SECURITY TAB
       # =========================================
 
-      - name: Upload SARIF Report
+      - name: Upload SARIF to GitHub Security
         uses: github/codeql-action/upload-sarif@v3
-
         with:
           sarif_file: trivy-results.sarif
 
       # =========================================
-      # UPLOAD JSON
+      # UPLOAD ARTIFACTS
       # =========================================
 
       - name: Upload Trivy JSON
         uses: actions/upload-artifact@v4
-
         with:
           name: trivy-json
           path: trivy.json
 
-      # =========================================
-      # UPLOAD SARIF ARTIFACT
-      # =========================================
-
       - name: Upload SARIF Artifact
         uses: actions/upload-artifact@v4
-
         with:
           name: trivy-sarif
           path: trivy-results.sarif
@@ -191,13 +183,8 @@ jobs:
 
       - name: Download Trivy JSON
         uses: actions/download-artifact@v4
-
         with:
           name: trivy-json
-
-      # =========================================
-      # GENERATE TRIVY MARKDOWN
-      # =========================================
 
       - name: Generate Trivy Markdown
         run: |
@@ -213,10 +200,6 @@ jobs:
           "| \(.Severity) | \(.PkgName) | \(.VulnerabilityID) | \(.InstalledVersion) | \(.FixedVersion // "N/A") |"
           ' trivy.json >> trivy.md
 
-      # =========================================
-      # GENERATE AI NOTES
-      # =========================================
-
       - name: Generate AI Notes
         run: |
 
@@ -225,19 +208,13 @@ jobs:
           echo "- Build completed successfully" >> ai.md
           echo "- Docker image built and pushed" >> ai.md
           echo "- Trivy scan completed" >> ai.md
-          echo "- SARIF security scan uploaded" >> ai.md
+          echo "- SARIF uploaded to Security tab" >> ai.md
           echo "- README auto updated" >> ai.md
-
-      # =========================================
-      # UPLOAD REPORTS
-      # =========================================
 
       - name: Upload Reports
         uses: actions/upload-artifact@v4
-
         with:
           name: reports
-
           path: |
             trivy.md
             ai.md
@@ -259,7 +236,6 @@ jobs:
 
       - name: Download Reports
         uses: actions/download-artifact@v4
-
         with:
           name: reports
 
@@ -271,7 +247,6 @@ jobs:
           HIGH=$(jq '[.Results[].Vulnerabilities[]? | select(.Severity=="HIGH")] | length' trivy.json)
 
           echo "CRITICAL: $CRITICAL"
-
           echo "HIGH: $HIGH"
 
           if [ "$CRITICAL" -gt 0 ] || [ "$HIGH" -gt 0 ]; then
@@ -300,7 +275,6 @@ jobs:
 
       - name: Download Reports
         uses: actions/download-artifact@v4
-
         with:
           name: reports
 
@@ -313,9 +287,7 @@ jobs:
           import re
 
           readme = Path("README.md").read_text()
-
           trivy = Path("trivy.md").read_text()
-
           ai = Path("ai.md").read_text()
 
           readme = re.sub(
@@ -359,13 +331,10 @@ jobs:
         run: |
 
           git config user.name "github-actions"
-
           git config user.email "github-actions@github.com"
 
           git add README.md
-
           git diff --cached --quiet && exit 0
 
           git commit -m "[skip ci] update trivy report"
-
           git push
