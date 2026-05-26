@@ -116,5 +116,5 @@ jobs:
             jq -r '.Results[]?.Vulnerabilities[]? |
             "| \(.Severity) | \(.PkgName) | \(.VulnerabilityID) | \(.Status) |"' trivy.json >> trivy-report.md
           else
-            echo "| No data | - | - | - |" >> trivy-report.md
+            echo "| No vulnerabilities found | - | - | - |" >> trivy-report.md
           fi
