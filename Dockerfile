@@ -1,4 +1,5 @@
-FROM node:22-alpine
+#FROM node:22-alpine
+FROM node:14-alpine # To check HIGH/CRITICAL vulnerabilities
 
 # Update npm
 RUN npm install -g npm@latest \
