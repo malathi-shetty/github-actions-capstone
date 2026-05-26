@@ -1,31 +1,357 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
+
 <head>
-  <title>DevSecOps Dashboard</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <title>DevSecOps CI/CD Dashboard</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
+    rel="stylesheet">
+
   <style>
-    body { font-family: Arial; background:#0d1117; color:white; padding:20px; }
-    .card { background:#161b22; padding:20px; border-radius:10px; margin:10px 0; }
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Poppins', sans-serif;
+      background: linear-gradient(135deg, #f3f7ff, #eef8ff, #ffffff);
+      color: #1e293b;
+      min-height: 100vh;
+      padding: 40px 20px;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: auto;
+    }
+
+    .hero {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+
+    .hero h1 {
+      font-size: 3rem;
+      font-weight: 700;
+      background: linear-gradient(90deg, #2563eb, #7c3aed);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 10px;
+    }
+
+    .hero p {
+      color: #475569;
+      font-size: 1.1rem;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 24px;
+    }
+
+    .card {
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(12px);
+      border-radius: 24px;
+      padding: 28px;
+      box-shadow:
+        0 10px 30px rgba(0, 0, 0, 0.08),
+        0 4px 12px rgba(37, 99, 235, 0.08);
+      transition: 0.3s ease;
+      border: 1px solid rgba(255, 255, 255, 0.7);
+    }
+
+    .card:hover {
+      transform: translateY(-6px);
+    }
+
+    .icon {
+      font-size: 2rem;
+      margin-bottom: 14px;
+    }
+
+    h2 {
+      margin-bottom: 14px;
+      font-size: 1.3rem;
+      color: #0f172a;
+    }
+
+    p,
+    li {
+      color: #475569;
+      line-height: 1.8;
+    }
+
+    ul {
+      padding-left: 18px;
+    }
+
+    .status {
+      display: inline-block;
+      padding: 8px 16px;
+      border-radius: 999px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      margin-top: 12px;
+    }
+
+    .success {
+      background: #dcfce7;
+      color: #166534;
+    }
+
+    .secure {
+      background: #dbeafe;
+      color: #1d4ed8;
+    }
+
+    .version {
+      background: #ede9fe;
+      color: #6d28d9;
+    }
+
+    .flow {
+      margin-top: 14px;
+      font-weight: 500;
+      color: #0f172a;
+    }
+
+    .badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    .badges img {
+      height: 28px;
+    }
+
+    .footer {
+      text-align: center;
+      margin-top: 50px;
+      color: #64748b;
+      font-size: 0.95rem;
+    }
+
+    .architecture {
+      margin-top: 50px;
+    }
+
+    .architecture-box {
+      margin-top: 20px;
+      background: white;
+      border-radius: 24px;
+      padding: 30px;
+      box-shadow: 0 8px 25px rgba(0, 0, 0, 0.08);
+      overflow-x: auto;
+    }
+
+    .pipeline {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+
+    .step {
+      flex: 1;
+      min-width: 140px;
+      background: linear-gradient(135deg, #2563eb, #7c3aed);
+      color: white;
+      text-align: center;
+      padding: 18px;
+      border-radius: 18px;
+      font-weight: 600;
+      box-shadow: 0 6px 18px rgba(37, 99, 235, 0.2);
+    }
+
+    .arrow {
+      font-size: 2rem;
+      color: #64748b;
+    }
+
+    .highlight {
+      color: #16a34a;
+      font-weight: 700;
+    }
+
+    @media(max-width:768px) {
+      .hero h1 {
+        font-size: 2.2rem;
+      }
+
+      .pipeline {
+        flex-direction: column;
+      }
+
+      .arrow {
+        transform: rotate(90deg);
+      }
+    }
   </style>
 </head>
 
 <body>
 
-<h1>🚀 DevSecOps Live Dashboard</h1>
+  <div class="container">
 
-<div class="card">
-  <h2>Pipeline Status</h2>
-  <p>Build → Docker → Trivy → Deploy</p>
-</div>
+    <div class="hero">
+      <h1>🚀 DevSecOps CI/CD Dashboard</h1>
+      <p>Production-ready Node.js CI/CD pipeline with Docker, GitHub Actions & Trivy Security</p>
+    </div>
 
-<div class="card">
-  <h2>Security</h2>
-  <p>Trivy scanning enabled (CRITICAL/HIGH blocked)</p>
-</div>
+    <div class="grid">
 
-<div class="card">
-  <h2>Version</h2>
-  <p>Latest Release: v1.0.x</p>
-</div>
+      <div class="card">
+        <div class="icon">📌</div>
+
+        <h2>Project Overview</h2>
+
+        <p>
+          Full DevSecOps implementation for a Node.js application with automated
+          CI/CD workflows, Docker containerization, Trivy vulnerability scanning,
+          deployment automation and GitHub Actions integration.
+        </p>
+
+        <div class="status success">
+          ✅ Production Ready
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="icon">🛠️</div>
+
+        <h2>Tech Stack</h2>
+
+        <ul>
+          <li>Node.js</li>
+          <li>Docker</li>
+          <li>GitHub Actions</li>
+          <li>Trivy Security Scanner</li>
+          <li>GitHub Pages</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="icon">📦</div>
+
+        <h2>Pipeline Flow</h2>
+
+        <p class="flow">
+          Build → Test → Docker → Trivy → Deploy
+        </p>
+
+        <div class="status secure">
+          🔐 HIGH / CRITICAL blocked
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="icon">🚀</div>
+
+        <h2>Release Summary</h2>
+
+        <p><strong>Build:</strong> Success</p>
+        <p><strong>Docker:</strong> Success</p>
+        <p><strong>Version:</strong> v1.0.x</p>
+        <p><strong>Security:</strong> Trivy Enforced</p>
+
+        <div class="status version">
+          📌 Latest Stable Release
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="icon">🔄</div>
+
+        <h2>Workflow Status</h2>
+
+        <div class="badges">
+
+          <img src="https://github.com/malathi-shetty/github-actions-capstone/actions/workflows/pr-pipeline.yml/badge.svg">
+
+          <img src="https://github.com/malathi-shetty/github-actions-capstone/actions/workflows/main-pipeline.yml/badge.svg">
+
+          <img src="https://github.com/malathi-shetty/github-actions-capstone/actions/workflows/reusable-docker.yml/badge.svg">
+
+          <img src="https://github.com/malathi-shetty/github-actions-capstone/actions/workflows/health-check.yml/badge.svg">
+
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="icon">🔐</div>
+
+        <h2>Security Status</h2>
+
+        <p>
+          Automated vulnerability scanning is enabled using Trivy.
+          Pipeline automatically blocks deployments if HIGH or CRITICAL
+          vulnerabilities are detected.
+        </p>
+
+        <p class="highlight">
+          ✔ Secure CI/CD Enforcement Enabled
+        </p>
+      </div>
+
+    </div>
+
+    <div class="architecture">
+
+      <div class="hero">
+        <h1 style="font-size:2.2rem;">🧱 CI/CD Architecture</h1>
+      </div>
+
+      <div class="architecture-box">
+
+        <div class="pipeline">
+
+          <div class="step">Developer Push</div>
+
+          <div class="arrow">➜</div>
+
+          <div class="step">GitHub Actions</div>
+
+          <div class="arrow">➜</div>
+
+          <div class="step">Build & Test</div>
+
+          <div class="arrow">➜</div>
+
+          <div class="step">Docker Build</div>
+
+          <div class="arrow">➜</div>
+
+          <div class="step">Trivy Scan</div>
+
+          <div class="arrow">➜</div>
+
+          <div class="step">Deploy</div>
+
+        </div>
+
+      </div>
+
+    </div>
+
+    <div class="footer">
+      Built with ❤️ using DevSecOps & GitHub Actions
+    </div>
+
+  </div>
 
 </body>
+
 </html>
