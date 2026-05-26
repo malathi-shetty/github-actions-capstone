@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: write
+  security-events: write
 
 jobs:
 
@@ -75,6 +76,10 @@ jobs:
 
     runs-on: ubuntu-latest
 
+    permissions:
+      contents: read
+      security-events: write
+
     steps:
 
       # =========================================
@@ -126,6 +131,30 @@ jobs:
             shettymalathi113/github-actions-capstone:v1.0.${{ github.run_number }}
 
       # =========================================
+      # GENERATE SARIF REPORT
+      # =========================================
+
+      - name: Generate SARIF Report
+        run: |
+
+          trivy image \
+            --severity HIGH,CRITICAL \
+            --ignore-unfixed \
+            --format sarif \
+            --output trivy-results.sarif \
+            shettymalathi113/github-actions-capstone:v1.0.${{ github.run_number }}
+
+      # =========================================
+      # UPLOAD SARIF TO GITHUB SECURITY TAB
+      # =========================================
+
+      - name: Upload SARIF Report
+        uses: github/codeql-action/upload-sarif@v3
+
+        with:
+          sarif_file: trivy-results.sarif
+
+      # =========================================
       # UPLOAD JSON
       # =========================================
 
@@ -135,6 +164,17 @@ jobs:
         with:
           name: trivy-json
           path: trivy.json
+
+      # =========================================
+      # UPLOAD SARIF ARTIFACT
+      # =========================================
+
+      - name: Upload SARIF Artifact
+        uses: actions/upload-artifact@v4
+
+        with:
+          name: trivy-sarif
+          path: trivy-results.sarif
 
   # =========================================
   # GENERATE REPORTS
@@ -185,6 +225,7 @@ jobs:
           echo "- Build completed successfully" >> ai.md
           echo "- Docker image built and pushed" >> ai.md
           echo "- Trivy scan completed" >> ai.md
+          echo "- SARIF security scan uploaded" >> ai.md
           echo "- README auto updated" >> ai.md
 
       # =========================================
@@ -201,6 +242,7 @@ jobs:
             trivy.md
             ai.md
             trivy.json
+            trivy-results.sarif
 
   # =========================================
   # SECURITY GATE
