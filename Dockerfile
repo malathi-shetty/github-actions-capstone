@@ -13,9 +13,10 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
+#Temporarily COMMENT OUT the npm upgrade line for vulnerability test.
 # Install dependencies
-RUN npm ci --omit=dev \
-    && npm cache clean --force
+#RUN npm ci --omit=dev \
+    #&& npm cache clean --force
 
 # Copy application source
 COPY --chown=node:node . .
