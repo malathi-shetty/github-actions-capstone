@@ -51,7 +51,7 @@ Build → Test → Docker → Scan → Tag → Deploy
 
 ---
 
-## 🔐 Vulnerability Report (Trivy)
+
 
 <!-- TRIVY-TABLE-START -->
 ## 🔐 Vulnerability Report (Trivy)
@@ -65,7 +65,7 @@ This section is automatically updated by CI/CD pipeline using Trivy scan results
 
 ---
 
-## 🤖 AI Release Notes
+
 
 <!-- AI-START -->
 ## 🤖 AI Release Notes
