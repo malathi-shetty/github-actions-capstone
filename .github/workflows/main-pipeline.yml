@@ -91,6 +91,7 @@ jobs:
           key: trivy-db-${{ runner.os }}
           restore-keys: trivy-db-${{ runner.os }}-
 
+      # ---------------- JSON SCAN ----------------
       - name: JSON Scan
         run: |
           trivy image \
@@ -100,6 +101,7 @@ jobs:
             --output trivy.json \
             shettymalathi113/github-actions-capstone:v1.0.${{ github.run_number }}
 
+      # ---------------- SARIF SCAN ----------------
       - name: SARIF Scan
         run: |
           trivy image \
@@ -109,6 +111,7 @@ jobs:
             --output trivy-results.sarif \
             shettymalathi113/github-actions-capstone:v1.0.${{ github.run_number }}
 
+      # ---------------- ARTIFACTS ----------------
       - uses: actions/upload-artifact@v4
         with:
           name: trivy-json
@@ -119,6 +122,7 @@ jobs:
           name: trivy-sarif
           path: trivy-results.sarif
 
+      # ---------------- SARIF UPLOAD ----------------
       - name: Upload SARIF
         uses: github/codeql-action/upload-sarif@v3
         with:
@@ -134,7 +138,7 @@ jobs:
 
 
 # =========================================================
-# 4. SECURITY DASHBOARD (ENTERPRISE + HTML + SCORE)
+# 4. SECURITY DASHBOARD (ENTERPRISE + SUMMARY + HTML)
 # =========================================================
   security-dashboard:
     name: Security Dashboard
@@ -159,9 +163,7 @@ jobs:
             echo '{"runs":[{"results":[]}]}'> trivy-results.sarif
           fi
 
-      # =========================
-      # METRICS
-      # =========================
+      # ---------------- METRICS ----------------
       - name: Compute Metrics
         run: |
           CRITICAL=$(jq '[.Results[].Vulnerabilities[]? | select(.Severity=="CRITICAL")] | length' trivy.json)
@@ -174,9 +176,7 @@ jobs:
           echo "HIGH=$HIGH" >> $GITHUB_ENV
           echo "SCORE=$SCORE" >> $GITHUB_ENV
 
-      # =========================
-      # STEP SUMMARY TABLE
-      # =========================
+      # ---------------- STEP SUMMARY ----------------
       - name: GitHub Summary
         run: |
           echo "## 🔐 Enterprise Security Dashboard" >> $GITHUB_STEP_SUMMARY
@@ -186,9 +186,7 @@ jobs:
           echo "| High | $HIGH |" >> $GITHUB_STEP_SUMMARY
           echo "| Score | $SCORE / 100 |" >> $GITHUB_STEP_SUMMARY
 
-      # =========================
-      # CVE GROUPING
-      # =========================
+      # ---------------- CVE GROUPING ----------------
       - name: CVE Grouping
         run: |
           echo "CRITICAL CVEs:" > cves.txt
@@ -197,21 +195,17 @@ jobs:
           echo "HIGH CVEs:" >> cves.txt
           jq -r '.Results[].Vulnerabilities[]? | select(.Severity=="HIGH") | .VulnerabilityID' trivy.json | sort -u >> cves.txt
 
-      # =========================
-      # DOCKER LAYER VIEW
-      # =========================
+      # ---------------- LAYER VIEW ----------------
       - name: Docker Layer Breakdown
         run: |
           jq -r '.Results[].Vulnerabilities[]? |
             .PkgName + " → " + (.PkgPath // "base-image")' trivy.json | head -20
 
-      # =========================
-      # HTML DASHBOARD (DOWNLOADABLE)
-      # =========================
+      # ---------------- HTML DASHBOARD ----------------
       - name: Generate HTML Dashboard
         run: |
           echo "<html><body>" > security-dashboard.html
-          echo "<h1>Enterprise Trivy Dashboard</h1>" >> security-dashboard.html
+          echo "<h1>Enterprise Security Dashboard</h1>" >> security-dashboard.html
           echo "<h2>Security Score: $SCORE / 100</h2>" >> security-dashboard.html
 
           echo "<h3>Critical Vulnerabilities</h3><pre>" >> security-dashboard.html
@@ -248,6 +242,9 @@ jobs:
         run: |
           CRITICAL=$(jq '[.Results[].Vulnerabilities[]? | select(.Severity=="CRITICAL")] | length' trivy.json)
           HIGH=$(jq '[.Results[].Vulnerabilities[]? | select(.Severity=="HIGH")] | length' trivy.json)
+
+          echo "CRITICAL=$CRITICAL"
+          echo "HIGH=$HIGH"
 
           if [ "$CRITICAL" -gt 0 ] || [ "$HIGH" -gt 0 ]; then
             echo "❌ BLOCKED: Security issues found"
