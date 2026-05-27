@@ -56,7 +56,7 @@ jobs:
 
 
 # =========================================================
-# 3. TRIVY SCAN
+# 3. TRIVY SCAN (SECURITY LAYER)
 # =========================================================
   trivy-scan:
     name: Trivy Scan
@@ -73,8 +73,20 @@ jobs:
       - name: Install Tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y jq trivy
+          sudo apt-get install -y jq wget gnupg
 
+          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | \
+          gpg --dearmor | sudo tee /usr/share/keyrings/trivy.gpg > /dev/null
+
+          echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb generic main" | \
+          sudo tee /etc/apt/sources.list.d/trivy.list
+
+          sudo apt-get update
+          sudo apt-get install -y trivy
+
+      # =====================================================
+      # CACHE TRIVY DB (FAST SCANS)
+      # =====================================================
       - name: Cache Trivy DB
         uses: actions/cache@v4
         with:
@@ -82,7 +94,10 @@ jobs:
           key: trivy-db-${{ runner.os }}
           restore-keys: trivy-db-${{ runner.os }}-
 
-      - name: JSON Scan
+      # =====================================================
+      # JSON SCAN
+      # =====================================================
+      - name: Run JSON Scan
         run: |
           trivy image \
             --severity HIGH,CRITICAL \
@@ -91,7 +106,10 @@ jobs:
             --output trivy.json \
             shettymalathi113/github-actions-capstone:v1.0.${{ github.run_number }}
 
-      - name: SARIF Scan
+      # =====================================================
+      # SARIF SCAN
+      # =====================================================
+      - name: Run SARIF Scan
         run: |
           trivy image \
             --severity HIGH,CRITICAL \
@@ -100,6 +118,9 @@ jobs:
             --output trivy-results.sarif \
             shettymalathi113/github-actions-capstone:v1.0.${{ github.run_number }}
 
+      # =====================================================
+      # UPLOAD ARTIFACTS
+      # =====================================================
       - uses: actions/upload-artifact@v4
         with:
           name: trivy-json
@@ -110,11 +131,17 @@ jobs:
           name: trivy-sarif
           path: trivy-results.sarif
 
+      # =====================================================
+      # SARIF → GITHUB SECURITY TAB
+      # =====================================================
       - name: Upload SARIF
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: trivy-results.sarif
 
+      # =====================================================
+      # PR ANNOTATIONS (INLINE SECURITY COMMENTS)
+      # =====================================================
       - name: PR Annotations
         if: github.event_name == 'pull_request'
         uses: github/codeql-action/upload-sarif@v3
@@ -123,7 +150,7 @@ jobs:
 
 
 # =========================================================
-# 4. SECURITY DASHBOARD (SAFE + PARALLEL)
+# 4. SECURITY DASHBOARD (HTML + STEP SUMMARY)
 # =========================================================
   security-dashboard:
     name: Security Dashboard
@@ -137,7 +164,21 @@ jobs:
         with:
           name: trivy-json
 
-      - name: Compute Security Score
+      - uses: actions/download-artifact@v4
+        with:
+          name: trivy-sarif
+        continue-on-error: true
+
+      - name: Fix SARIF fallback
+        run: |
+          if [ ! -f trivy-results.sarif ]; then
+            echo '{"runs":[{"results":[]}]}'> trivy-results.sarif
+          fi
+
+      # =====================================================
+      # SECURITY SCORE + METRICS
+      # =====================================================
+      - name: Compute Metrics
         run: |
           CRITICAL=$(jq '[.Results[].Vulnerabilities[]? | select(.Severity=="CRITICAL")] | length' trivy.json)
           HIGH=$(jq '[.Results[].Vulnerabilities[]? | select(.Severity=="HIGH")] | length' trivy.json)
@@ -146,42 +187,40 @@ jobs:
           if [ "$SCORE" -lt 0 ]; then SCORE=0; fi
 
           echo "SCORE=$SCORE" >> $GITHUB_ENV
-          echo "Security Score: $SCORE"
+          echo "CRITICAL=$CRITICAL" >> $GITHUB_ENV
+          echo "HIGH=$HIGH" >> $GITHUB_ENV
 
-      - name: CVE Grouping
+      # =====================================================
+      # STEP SUMMARY DASHBOARD
+      # =====================================================
+      - name: GitHub Summary
         run: |
-          echo "CRITICAL CVEs:"
-          jq -r '.Results[].Vulnerabilities[]? | select(.Severity=="CRITICAL") | .VulnerabilityID' trivy.json | sort -u
+          echo "## 🔐 Security Dashboard Summary" >> $GITHUB_STEP_SUMMARY
 
-          echo "HIGH CVEs:"
-          jq -r '.Results[].Vulnerabilities[]? | select(.Severity=="HIGH") | .VulnerabilityID' trivy.json | sort -u
+          echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Critical | $CRITICAL |" >> $GITHUB_STEP_SUMMARY
+          echo "| High | $HIGH |" >> $GITHUB_STEP_SUMMARY
+          echo "| Score | $SCORE / 100 |" >> $GITHUB_STEP_SUMMARY
 
-      - name: Docker Layer Breakdown
+      # =====================================================
+      # HTML DASHBOARD (DOWNLOADABLE)
+      # =====================================================
+      - name: Generate HTML Dashboard
         run: |
-          jq -r '.Results[].Vulnerabilities[]? |
-            .PkgName + " → " + (.PkgPath // "base-image")' trivy.json | head -20
-
-      - name: Generate HTML Dashboard (NO HEREDOC)
-        run: |
-          echo "<html>" > security-dashboard.html
-          echo "<head><title>Security Dashboard</title></head>" >> security-dashboard.html
-          echo "<body>" >> security-dashboard.html
-
+          echo "<html><body>" > security-dashboard.html
           echo "<h1>Trivy Security Dashboard</h1>" >> security-dashboard.html
           echo "<h2>Security Score: $SCORE / 100</h2>" >> security-dashboard.html
 
-          echo "<h3>CRITICAL Vulnerabilities</h3>" >> security-dashboard.html
-          echo "<pre>" >> security-dashboard.html
+          echo "<h3>Critical Vulnerabilities</h3><pre>" >> security-dashboard.html
           jq '.Results[].Vulnerabilities[]? | select(.Severity=="CRITICAL")' trivy.json >> security-dashboard.html
           echo "</pre>" >> security-dashboard.html
 
-          echo "<h3>HIGH Vulnerabilities</h3>" >> security-dashboard.html
-          echo "<pre>" >> security-dashboard.html
+          echo "<h3>High Vulnerabilities</h3><pre>" >> security-dashboard.html
           jq '.Results[].Vulnerabilities[]? | select(.Severity=="HIGH")' trivy.json >> security-dashboard.html
           echo "</pre>" >> security-dashboard.html
 
-          echo "</body>" >> security-dashboard.html
-          echo "</html>" >> security-dashboard.html
+          echo "</body></html>" >> security-dashboard.html
 
       - uses: actions/upload-artifact@v4
         with:
@@ -203,7 +242,7 @@ jobs:
         with:
           name: trivy-json
 
-      - name: Evaluate Security
+      - name: Evaluate
         run: |
           CRITICAL=$(jq '[.Results[].Vulnerabilities[]? | select(.Severity=="CRITICAL")] | length' trivy.json)
           HIGH=$(jq '[.Results[].Vulnerabilities[]? | select(.Severity=="HIGH")] | length' trivy.json)
