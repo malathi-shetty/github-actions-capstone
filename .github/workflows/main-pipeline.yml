@@ -18,7 +18,7 @@ permissions:
 
 # =========================================================
 # FLOW
-# build-test → docker → (parallel security + reports + dashboard) → gate → deploy
+# build-test → docker → trivy-scan → (parallel dashboards) → gate → deploy
 # =========================================================
 
 jobs:
@@ -55,7 +55,7 @@ jobs:
 
 
 # =========================================================
-# 3. TRIVY SCAN (SECURITY ENGINE)
+# 3. TRIVY SCAN (PRODUCER JOB)
 # =========================================================
   trivy-scan:
     name: Trivy Scan
@@ -74,7 +74,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y jq trivy
 
-      # Cache DB (FAST SCANS)
+      # Cache DB (faster scans)
       - name: Cache Trivy DB
         uses: actions/cache@v4
         with:
@@ -103,7 +103,7 @@ jobs:
             --output trivy-results.sarif \
             shettymalathi113/github-actions-capstone:v1.0.${{ github.run_number }}
 
-      # Upload artifacts
+      # Upload artifacts (SHARED SOURCE)
       - uses: actions/upload-artifact@v4
         with:
           name: trivy-json
@@ -114,7 +114,7 @@ jobs:
           name: trivy-sarif
           path: trivy-results.sarif
 
-      # Upload SARIF → Security Tab
+      # Security tab upload
       - name: Upload SARIF
         uses: github/codeql-action/upload-sarif@v3
         with:
@@ -141,11 +141,11 @@ jobs:
 
 
 # =========================================================
-# 4. REPORTS (PARALLEL)
+# 4. REPORTS (PARALLEL - FIXED)
 # =========================================================
   generate-reports:
     name: Generate Reports
-    needs: docker
+    needs: trivy-scan   # FIXED
     runs-on: ubuntu-latest
 
     steps:
@@ -163,7 +163,7 @@ jobs:
           trivy.json >> trivy.md
 
           echo "## 🤖 AI Summary" > ai.md
-          echo "- Automated scan completed successfully" >> ai.md
+          echo "- Scan completed successfully" >> ai.md
 
       - uses: actions/upload-artifact@v4
         with:
@@ -174,11 +174,11 @@ jobs:
 
 
 # =========================================================
-# 5. SECURITY DASHBOARD (PARALLEL INSIGHTS)
+# 5. SECURITY DASHBOARD (PARALLEL - FIXED)
 # =========================================================
   security-dashboard:
     name: Security Dashboard
-    needs: docker
+    needs: trivy-scan   # FIXED
     runs-on: ubuntu-latest
 
     steps:
@@ -226,7 +226,7 @@ jobs:
 
 
 # =========================================================
-# 6. SECURITY GATE (FINAL CONTROL)
+# 6. SECURITY GATE (FINAL - FIXED DEPENDENCY)
 # =========================================================
   security-gate:
     name: Security Gate
@@ -254,7 +254,7 @@ jobs:
 
 
 # =========================================================
-# 7. DEPLOY (ONLY IF CLEAN)
+# 7. DEPLOY
 # =========================================================
   deploy:
     name: Deploy
