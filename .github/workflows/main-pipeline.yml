@@ -11,6 +11,10 @@ on:
 
   workflow_dispatch:
 
+  # Weekly security + Dependabot validation
+  schedule:
+    - cron: '0 2 * * 1'
+
 permissions:
   contents: write
   security-events: write
@@ -18,16 +22,48 @@ permissions:
 
 # =========================================================
 # FLOW
-# build-test → docker → trivy-scan → reports → dashboard → gate → deploy
+# validate-secrets
+#        ↓
+# build-test
+#        ↓
+# docker
+#        ↓
+# trivy-scan
+#    ↙      ↘
+# reports   dashboard
+#      ↘    ↙
+#    security-gate
+#          ↓
+#       deploy
 # =========================================================
 
 jobs:
 
   # =========================================================
-  # 1. BUILD & TEST
+  # 1. VALIDATE SECRETS
+  # =========================================================
+  validate-secrets:
+    name: Validate Secrets
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Validate Docker Secrets
+        run: |
+          if [ -z "${{ secrets.DOCKER_USERNAME }}" ] || [ -z "${{ secrets.DOCKER_TOKEN }}" ]; then
+            echo "❌ Missing Docker secrets"
+            exit 1
+          fi
+
+          echo "✅ Docker secrets available"
+
+
+  # =========================================================
+  # 2. BUILD & TEST
   # =========================================================
   build-test:
     name: Build & Test
+
+    needs: validate-secrets
 
     uses: ./.github/workflows/reusable-build-test.yml
 
@@ -37,18 +73,16 @@ jobs:
 
 
   # =========================================================
-  # 2. DOCKER BUILD
+  # 3. DOCKER BUILD
   # =========================================================
   docker:
     name: Docker Build
 
-    # Skip Docker push for Dependabot
-    if: |
-      github.actor != 'dependabot[bot]' &&
-      secrets.DOCKER_USERNAME != '' &&
-      secrets.DOCKER_TOKEN != ''
+    needs:
+      - validate-secrets
+      - build-test
 
-    needs: build-test
+    if: github.actor != 'dependabot[bot]'
 
     uses: ./.github/workflows/reusable-docker.yml
 
@@ -64,14 +98,15 @@ jobs:
 
 
   # =========================================================
-  # 3. TRIVY SCAN
+  # 4. TRIVY SCAN
   # =========================================================
   trivy-scan:
     name: Trivy Scan
 
+    needs: docker
+
     if: needs.docker.result == 'success'
 
-    needs: docker
     runs-on: ubuntu-latest
 
     permissions:
@@ -81,17 +116,23 @@ jobs:
 
     steps:
 
-      # Checkout
+      # =====================================================
+      # CHECKOUT (PINNED SHA)
+      # =====================================================
       - name: Checkout code
         uses: actions/checkout@c2d88d3ecc89a9ef08eebf45d9637801dcee7eb5
 
-      # Install tools
+      # =====================================================
+      # INSTALL TOOLS
+      # =====================================================
       - name: Install Tools
         run: |
           sudo apt-get update
           sudo apt-get install -y jq trivy
 
-      # Cache Trivy DB
+      # =====================================================
+      # CACHE TRIVY DB (PINNED SHA)
+      # =====================================================
       - name: Cache Trivy DB
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae
 
@@ -102,7 +143,9 @@ jobs:
           restore-keys: |
             trivy-db-${{ runner.os }}-
 
-      # JSON Scan
+      # =====================================================
+      # JSON SCAN
+      # =====================================================
       - name: Run JSON Scan
         run: |
           trivy image \
@@ -112,7 +155,9 @@ jobs:
             --output trivy.json \
             shettymalathi113/github-actions-capstone:v1.0.${{ github.run_number }}
 
-      # SARIF Scan
+      # =====================================================
+      # SARIF SCAN
+      # =====================================================
       - name: Run SARIF Scan
         run: |
           trivy image \
@@ -122,30 +167,38 @@ jobs:
             --output trivy-results.sarif \
             shettymalathi113/github-actions-capstone:v1.0.${{ github.run_number }}
 
-      # Upload JSON Artifact
+      # =====================================================
+      # UPLOAD JSON ARTIFACT (PINNED SHA)
+      # =====================================================
       - name: Upload JSON Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808
 
         with:
           name: trivy-json
           path: trivy.json
 
-      # Upload SARIF Artifact
+      # =====================================================
+      # UPLOAD SARIF ARTIFACT (PINNED SHA)
+      # =====================================================
       - name: Upload SARIF Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808
 
         with:
           name: trivy-sarif
           path: trivy-results.sarif
 
-      # Upload SARIF to Security Tab
+      # =====================================================
+      # UPLOAD SARIF TO GITHUB SECURITY TAB
+      # =====================================================
       - name: Upload SARIF
         uses: github/codeql-action/upload-sarif@v3
 
         with:
           sarif_file: trivy-results.sarif
 
-      # PR annotations
+      # =====================================================
+      # PR ANNOTATIONS
+      # =====================================================
       - name: SARIF PR Annotations
         if: github.event_name == 'pull_request'
 
@@ -154,7 +207,9 @@ jobs:
         with:
           sarif_file: trivy-results.sarif
 
-      # SARIF Gate
+      # =====================================================
+      # SARIF SECURITY GATE
+      # =====================================================
       - name: SARIF Security Gate
         run: |
           COUNT=$(jq '[.runs[].results[]? | select(.level=="error")] | length' trivy-results.sarif)
@@ -168,24 +223,31 @@ jobs:
 
 
   # =========================================================
-  # 4. REPORTS
+  # 5. GENERATE REPORTS
   # =========================================================
   generate-reports:
     name: Generate Reports
 
+    needs: trivy-scan
+
     if: needs.trivy-scan.result == 'success'
 
-    needs: trivy-scan
     runs-on: ubuntu-latest
 
     steps:
 
+      # =====================================================
+      # DOWNLOAD ARTIFACT (PINNED SHA)
+      # =====================================================
       - name: Download Trivy JSON
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
 
         with:
           name: trivy-json
 
+      # =====================================================
+      # BUILD REPORTS
+      # =====================================================
       - name: Build Reports
         run: |
           echo "## 📦 Trivy Report" > trivy.md
@@ -197,8 +259,11 @@ jobs:
           echo "## 🤖 AI Summary" > ai.md
           echo "- Scan completed successfully" >> ai.md
 
+      # =====================================================
+      # UPLOAD REPORTS (PINNED SHA)
+      # =====================================================
       - name: Upload Reports
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808
 
         with:
           name: reports
@@ -209,24 +274,31 @@ jobs:
 
 
   # =========================================================
-  # 5. SECURITY DASHBOARD
+  # 6. SECURITY DASHBOARD
   # =========================================================
   security-dashboard:
     name: Security Dashboard
 
+    needs: trivy-scan
+
     if: needs.trivy-scan.result == 'success'
 
-    needs: trivy-scan
     runs-on: ubuntu-latest
 
     steps:
 
+      # =====================================================
+      # DOWNLOAD JSON (PINNED SHA)
+      # =====================================================
       - name: Download Trivy JSON
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
 
         with:
           name: trivy-json
 
+      # =====================================================
+      # JSON SUMMARY
+      # =====================================================
       - name: JSON Scan Summary
         run: |
           echo "## 📦 JSON Scan Summary" >> $GITHUB_STEP_SUMMARY
@@ -237,6 +309,9 @@ jobs:
           echo "- Critical: $CRITICAL" >> $GITHUB_STEP_SUMMARY
           echo "- High: $HIGH" >> $GITHUB_STEP_SUMMARY
 
+      # =====================================================
+      # TOP PACKAGES
+      # =====================================================
       - name: Top Vulnerable Packages
         run: |
           echo "## 📦 Top Vulnerable Packages" >> $GITHUB_STEP_SUMMARY
@@ -247,6 +322,9 @@ jobs:
               echo "- $pkg → $count issues" >> $GITHUB_STEP_SUMMARY
             done
 
+      # =====================================================
+      # IMAGE INFO
+      # =====================================================
       - name: Image Info
         run: |
           echo "## 🐳 Image Info" >> $GITHUB_STEP_SUMMARY
@@ -254,6 +332,22 @@ jobs:
           echo "- Build: v1.0.${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
           echo "- Commit: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
 
+      # =====================================================
+      # SHA COMPLIANCE REPORT
+      # =====================================================
+      - name: SHA Compliance Report
+        run: |
+          echo "## 🔐 SHA Compliance Report" >> $GITHUB_STEP_SUMMARY
+          echo "| Action | SHA |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| actions/checkout | c2d88d3ecc89a9ef08eebf45d9637801dcee7eb5 |" >> $GITHUB_STEP_SUMMARY
+          echo "| actions/cache | 27d5ce7f107fe9357f9df03efb73ab90386fccae |" >> $GITHUB_STEP_SUMMARY
+          echo "| actions/upload-artifact | 65462800fd760344b1a7b4382951275a0abb4808 |" >> $GITHUB_STEP_SUMMARY
+          echo "| actions/download-artifact | fa0a91b85d4f404e444e00e005971372dc801d16 |" >> $GITHUB_STEP_SUMMARY
+
+      # =====================================================
+      # SECURITY VERDICT
+      # =====================================================
       - name: Security Verdict
         run: |
           CRITICAL=$(jq '[.Results[].Vulnerabilities[]? | select(.Severity=="CRITICAL")] | length' trivy.json)
@@ -266,28 +360,34 @@ jobs:
 
 
   # =========================================================
-  # 6. SECURITY GATE
+  # 7. SECURITY GATE
   # =========================================================
   security-gate:
     name: Security Gate
-
-    if: needs.trivy-scan.result == 'success'
 
     needs:
       - trivy-scan
       - generate-reports
       - security-dashboard
 
+    if: needs.trivy-scan.result == 'success'
+
     runs-on: ubuntu-latest
 
     steps:
 
+      # =====================================================
+      # DOWNLOAD JSON (PINNED SHA)
+      # =====================================================
       - name: Download Trivy JSON
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
 
         with:
           name: trivy-json
 
+      # =====================================================
+      # FINAL SECURITY GATE
+      # =====================================================
       - name: Final Evaluation
         run: |
           CRITICAL=$(jq '[.Results[].Vulnerabilities[]? | select(.Severity=="CRITICAL")] | length' trivy.json)
@@ -301,18 +401,21 @@ jobs:
             exit 1
           fi
 
+          echo "✅ SECURITY GATE PASSED"
+
 
   # =========================================================
-  # 7. DEPLOY
+  # 8. DEPLOY
   # =========================================================
   deploy:
     name: Deploy
+
+    needs: security-gate
 
     if: |
       needs.security-gate.result == 'success' &&
       github.actor != 'dependabot[bot]'
 
-    needs: security-gate
     runs-on: ubuntu-latest
 
     steps:
