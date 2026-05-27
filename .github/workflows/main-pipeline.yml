@@ -232,37 +232,57 @@ jobs:
       # =====================================================
       # FIXED HTML DASHBOARD (READABLE NOW)
       # =====================================================
-      - name: Generate HTML Dashboard
+      - name: Generate HTML Dashboard (Readable)
         run: |
-          CRITICAL_JSON=$(jq -c '[.Results[].Vulnerabilities[]? | select(.Severity=="CRITICAL")]' trivy.json)
-          HIGH_JSON=$(jq -c '[.Results[].Vulnerabilities[]? | select(.Severity=="HIGH")]' trivy.json)
+          CRITICAL_COUNT=$(jq '[.Results[].Vulnerabilities[]? | select(.Severity=="CRITICAL")] | length' trivy.json)
+          HIGH_COUNT=$(jq '[.Results[].Vulnerabilities[]? | select(.Severity=="HIGH")] | length' trivy.json)
 
           echo "<html>" > security-dashboard.html
           echo "<head>" >> security-dashboard.html
-          echo "<title>Trivy Security Dashboard</title>" >> security-dashboard.html
+          echo "<title>Security Dashboard</title>" >> security-dashboard.html
+
           echo "<style>" >> security-dashboard.html
-          echo "body { font-family: Arial; margin: 20px; }" >> security-dashboard.html
-          echo "pre { background: #f4f4f4; padding: 10px; overflow-x: auto; }" >> security-dashboard.html
-          echo "h1, h2, h3 { color: #333; }" >> security-dashboard.html
+          echo "body{font-family:Arial;margin:20px;background:#f4f4f4}" >> security-dashboard.html
+          echo ".card{background:white;padding:15px;margin:10px;border-radius:10px;box-shadow:0 2px 5px gray}" >> security-dashboard.html
+          echo ".critical{color:white;background:#e74c3c;padding:5px;border-radius:5px}" >> security-dashboard.html
+          echo ".high{color:white;background:#f39c12;padding:5px;border-radius:5px}" >> security-dashboard.html
+          echo ".safe{color:white;background:#2ecc71;padding:5px;border-radius:5px}" >> security-dashboard.html
           echo "</style>" >> security-dashboard.html
-          echo "</head>" >> security-dashboard.html
 
-          echo "<body>" >> security-dashboard.html
+          echo "</head><body>" >> security-dashboard.html
+
           echo "<h1>🛡 Security Dashboard</h1>" >> security-dashboard.html
-          echo "<h2>Score: $SCORE / 100</h2>" >> security-dashboard.html
+          echo "<div class='card'><h2>Score: $SCORE / 100</h2></div>" >> security-dashboard.html
 
-          echo "<h3>Critical Vulnerabilities</h3>" >> security-dashboard.html
-          echo "<pre>" >> security-dashboard.html
-          echo "$CRITICAL_JSON" >> security-dashboard.html
-          echo "</pre>" >> security-dashboard.html
+          echo "<div class='card'>" >> security-dashboard.html
+          echo "<h3>📦 Summary</h3>" >> security-dashboard.html
+          echo "<p class='critical'>Critical: $CRITICAL_COUNT</p>" >> security-dashboard.html
+          echo "<p class='high'>High: $HIGH_COUNT</p>" >> security-dashboard.html
+          echo "</div>" >> security-dashboard.html
 
-          echo "<h3>High Vulnerabilities</h3>" >> security-dashboard.html
-          echo "<pre>" >> security-dashboard.html
-          echo "$HIGH_JSON" >> security-dashboard.html
-          echo "</pre>" >> security-dashboard.html
+          echo "<div class='card'>" >> security-dashboard.html
+          echo "<h3>🔥 Critical Vulnerabilities</h3>" >> security-dashboard.html
 
-          echo "</body>" >> security-dashboard.html
-          echo "</html>" >> security-dashboard.html
+          jq -r '
+            .Results[].Vulnerabilities[]? |
+            select(.Severity=="CRITICAL") |
+            "<p><b>\(.PkgName)</b> → \(.VulnerabilityID) <br> Fix: \(.FixedVersion // "N/A")</p>"
+          ' trivy.json >> security-dashboard.html
+
+          echo "</div>" >> security-dashboard.html
+
+          echo "<div class='card'>" >> security-dashboard.html
+          echo "<h3>⚠️ High Vulnerabilities</h3>" >> security-dashboard.html
+
+          jq -r '
+            .Results[].Vulnerabilities[]? |
+            select(.Severity=="HIGH") |
+            "<p><b>\(.PkgName)</b> → \(.VulnerabilityID) <br> Fix: \(.FixedVersion // "N/A")</p>"
+          ' trivy.json >> security-dashboard.html
+
+          echo "</div>" >> security-dashboard.html
+
+          echo "</body></html>" >> security-dashboard.html
           
       - uses: actions/upload-artifact@v4
         with:
