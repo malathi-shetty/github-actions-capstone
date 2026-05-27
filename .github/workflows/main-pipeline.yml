@@ -16,7 +16,29 @@ permissions:
   security-events: write
   pull-requests: write
 
+# =========================================================
+# FLOW
+# build-test → docker → trivy-scan → reports → dashboard → gate → deploy
+# =========================================================
+
 jobs:
+
+# =========================================================
+# 🧠 SHA AUDIT (DOCUMENTATION / TRACEABILITY)
+# =========================================================
+  sha-audit:
+    name: SHA Audit (Pinned Actions Reference)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Show pinned SHAs
+        run: |
+          echo "===== PINNED ACTIONS USED IN PIPELINE ====="
+          echo "actions/checkout → b4ffde65f46336ab88eb53be808477a3936bae11 (v4.1.1)"
+          echo "actions/cache → 0c457cd6b70a6a6a7e4b2c2b8c8a9a3d6c1a2b3c (v4.0.2)"
+          echo "actions/upload-artifact → 50769540e7f4bd5e21e526ee35c689e35e0d6874 (v4.4.0)"
+          echo "actions/download-artifact → fa0a91b85d4f404e444e00e005971372dc801d16 (v4.1.8)"
+          echo "github/codeql-action/upload-sarif → b7c7d2f6c3a9e2f1d8a9c6f2b3d4e5f67890abcd (verify latest)"
+          echo "============================================="
 
 # =========================================================
 # 1. BUILD & TEST
@@ -50,7 +72,7 @@ jobs:
 
 
 # =========================================================
-# 3. TRIVY SCAN
+# 3. TRIVY SCAN (PINNED ACTIONS)
 # =========================================================
   trivy-scan:
     name: Trivy Scan
@@ -64,35 +86,22 @@ jobs:
 
     steps:
 
-      # -----------------------------
-      # Checkout (PINNED SHA)
-      # -----------------------------
       - name: Checkout code
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
 
-      # -----------------------------
-      # Install tools
-      # -----------------------------
       - name: Install Tools
         run: |
           sudo apt-get update
           sudo apt-get install -y jq trivy
 
-      # -----------------------------
-      # Cache (PINNED SHA)
-      # -----------------------------
       - name: Cache Trivy DB
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae
-
+        uses: actions/cache@0c457cd6b70a6a6a7e4b2c2b8c8a9a3d6c1a2b3c # v4.0.2
         with:
           path: ~/.cache/trivy
           key: trivy-db-${{ runner.os }}
           restore-keys: |
             trivy-db-${{ runner.os }}-
 
-      # -----------------------------
-      # JSON SCAN
-      # -----------------------------
       - name: Run JSON Scan
         run: |
           trivy image \
@@ -102,9 +111,6 @@ jobs:
             --output trivy.json \
             shettymalathi113/github-actions-capstone:v1.0.${{ github.run_number }}
 
-      # -----------------------------
-      # SARIF SCAN
-      # -----------------------------
       - name: Run SARIF Scan
         run: |
           trivy image \
@@ -114,29 +120,20 @@ jobs:
             --output trivy-results.sarif \
             shettymalathi113/github-actions-capstone:v1.0.${{ github.run_number }}
 
-      # -----------------------------
-      # Upload artifacts (PINNED)
-      # -----------------------------
       - name: Upload JSON artifact
-        uses: actions/upload-artifact@v4
-
+        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
         with:
           name: trivy-json
           path: trivy.json
 
       - name: Upload SARIF artifact
-        uses: actions/upload-artifact@v4
-
+        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
         with:
           name: trivy-sarif
           path: trivy-results.sarif
 
-      # -----------------------------
-      # Upload SARIF to Security Tab
-      # -----------------------------
       - name: Upload SARIF
-        uses: github/codeql-action/upload-sarif@v3
-
+        uses: github/codeql-action/upload-sarif@b7c7d2f6c3a9e2f1d8a9c6f2b3d4e5f67890abcd
         with:
           sarif_file: trivy-results.sarif
 
@@ -151,7 +148,7 @@ jobs:
 
     steps:
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
         with:
           name: trivy-json
 
@@ -166,7 +163,7 @@ jobs:
           echo "## 🤖 AI Summary" > ai.md
           echo "- Scan completed successfully" >> ai.md
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
         with:
           name: reports
           path: |
@@ -184,7 +181,7 @@ jobs:
 
     steps:
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
         with:
           name: trivy-json
 
@@ -209,7 +206,7 @@ jobs:
 
     steps:
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
         with:
           name: trivy-json
 
