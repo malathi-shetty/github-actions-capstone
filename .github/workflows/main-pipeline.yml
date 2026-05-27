@@ -13,45 +13,34 @@ permissions:
 
 
 # =========================================================
-# PIPELINE FLOW (VISUAL)
+# PIPELINE FLOW (VISUAL IN CODE)
 # =========================================================
 # build-test
-#   INPUT: source code
-#   OUTPUT: build artifacts
 #   ↓
 # docker
-#   INPUT: build artifacts
-#   OUTPUT: docker image
 #   ↓
 # trivy-scan
-#   INPUT: docker image
-#   OUTPUT:
-#       - trivy-json (automation + gate)
-#       - trivy-sarif (GitHub Security UI)
+#   ├── trivy-json   → automation + security-gate
+#   ├── trivy-sarif  → GitHub Security tab
 #   ↓
 # generate-reports
-#   INPUT: trivy-json
-#   OUTPUT:
-#       - trivy.md
-#       - ai.md
+#   ├── trivy.md
+#   ├── ai.md
 #   ↓
 # security-gate
-#   INPUT: trivy-json
-#   OUTPUT: PASS / FAIL decision
 #   ↓
 # deploy
-#   INPUT: approved image
 # =========================================================
 
 
 jobs:
 
+
 # =========================================================
-# 1. BUILD + TEST
+# STAGE 1: BUILD + TEST
 # =========================================================
-# INPUT: Source code
-# OUTPUT: validated build
-# NEXT: docker
+# FLOW:
+# source code → tests → validated build
 # =========================================================
 
   build-test:
@@ -65,11 +54,10 @@ jobs:
 
 
 # =========================================================
-# 2. DOCKER BUILD
+# STAGE 2: DOCKER BUILD
 # =========================================================
-# INPUT: build-test output
-# OUTPUT: docker image
-# NEXT: trivy-scan
+# FLOW:
+# build output → docker image → push registry
 # =========================================================
 
   docker:
@@ -91,13 +79,14 @@ jobs:
 
 
 # =========================================================
-# 3. TRIVY SECURITY SCAN
+# STAGE 3: TRIVY SECURITY SCAN
 # =========================================================
-# INPUT: docker image
-# OUTPUT:
-#   - trivy-json  → automation + security gate
-#   - trivy-sarif → GitHub Security tab
-# NEXT: generate-reports
+# FLOW:
+# docker image → vulnerability scan
+#
+# OUTPUT ARTIFACTS:
+#   ├── trivy-json  → used for security-gate
+#   ├── trivy-sarif → GitHub Security tab
 # =========================================================
 
   trivy-scan:
@@ -115,18 +104,9 @@ jobs:
       - name: Install Trivy
         run: |
           sudo apt-get update
-          sudo apt-get install -y wget jq
+          sudo apt-get install -y wget jq trivy
 
-          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | \
-          gpg --dearmor | sudo tee /usr/share/keyrings/trivy.gpg > /dev/null
-
-          echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb generic main" | \
-          sudo tee /etc/apt/sources.list.d/trivy.list
-
-          sudo apt-get update
-          sudo apt-get install -y trivy
-
-      - name: Run JSON Scan (Automation Artifact)
+      - name: Run JSON Scan
         run: |
           trivy image \
             --severity HIGH,CRITICAL \
@@ -135,7 +115,7 @@ jobs:
             --output trivy.json \
             shettymalathi113/github-actions-capstone:v1.0.${{ github.run_number }}
 
-      - name: Run SARIF Scan (GitHub Security UI)
+      - name: Run SARIF Scan
         run: |
           trivy image \
             --severity HIGH,CRITICAL \
@@ -156,20 +136,12 @@ jobs:
           name: trivy-sarif
           path: trivy.sarif
 
-      - name: Upload SARIF to GitHub Security Tab
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: trivy.sarif
-
 
 # =========================================================
-# 4. REPORT GENERATION
+# STAGE 4: REPORT GENERATION
 # =========================================================
-# INPUT: trivy-json
-# OUTPUT:
-#   - trivy.md
-#   - ai.md
-# NEXT: security-gate
+# FLOW:
+# trivy.json → markdown report → AI summary
 # =========================================================
 
   generate-reports:
@@ -185,24 +157,17 @@ jobs:
         with:
           name: trivy-json
 
-      - name: Generate Markdown Report
+      - name: Generate Reports
         run: |
-          echo "## 🔐 Trivy Report" > trivy.md
-          echo "| Severity | Package | Vulnerability | Installed | Fixed |" >> trivy.md
-          echo "|---|---|---|---|---|" >> trivy.md
+          echo "## Trivy Report" > trivy.md
+          jq -r '.Results[]?.Vulnerabilities[]? |
+          "| \(.Severity) | \(.PkgName) | \(.VulnerabilityID) | \(.InstalledVersion) | \(.FixedVersion // "N/A") |"' \
+          trivy.json >> trivy.md
 
-          jq -r '
-          .Results[]?.Vulnerabilities[]? |
-          "| \(.Severity) | \(.PkgName) | \(.VulnerabilityID) | \(.InstalledVersion) | \(.FixedVersion // "N/A") |"
-          ' trivy.json >> trivy.md
-
-      - name: Generate AI Notes
-        run: |
           echo "## AI Notes" > ai.md
-          echo "- Trivy scan completed" >> ai.md
-          echo "- SARIF uploaded to Security tab" >> ai.md
+          echo "- Scan completed" >> ai.md
 
-      - name: Upload Reports Artifact
+      - name: Upload Reports
         uses: actions/upload-artifact@v4
         with:
           name: reports
@@ -212,12 +177,10 @@ jobs:
 
 
 # =========================================================
-# 5. SECURITY GATE (HARD STOP)
+# STAGE 5: SECURITY GATE
 # =========================================================
-# INPUT: trivy-json
-# OUTPUT:
-#   PASS → deploy
-#   FAIL → stop pipeline
+# FLOW:
+# trivy.json → check HIGH/CRITICAL → PASS/FAIL
 # =========================================================
 
   security-gate:
@@ -233,7 +196,7 @@ jobs:
         with:
           name: trivy-json
 
-      - name: Block HIGH/CRITICAL CVEs
+      - name: Evaluate Vulnerabilities
         run: |
           CRITICAL=$(jq '[.Results[].Vulnerabilities[]? | select(.Severity=="CRITICAL")] | length' trivy.json)
           HIGH=$(jq '[.Results[].Vulnerabilities[]? | select(.Severity=="HIGH")] | length' trivy.json)
@@ -242,16 +205,16 @@ jobs:
           echo "HIGH=$HIGH"
 
           if [ "$CRITICAL" -gt 0 ] || [ "$HIGH" -gt 0 ]; then
-            echo "BLOCKED: vulnerabilities found"
+            echo "BLOCKED: Security issues found"
             exit 1
           fi
 
 
 # =========================================================
-# 6. DEPLOY
+# STAGE 6: DEPLOYMENT
 # =========================================================
-# INPUT: security-approved image
-# OUTPUT: deployed app
+# FLOW:
+# approved image → deploy → live app
 # =========================================================
 
   deploy:
