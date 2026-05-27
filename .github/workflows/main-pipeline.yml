@@ -82,7 +82,7 @@ jobs:
       # Cache (PINNED SHA)
       # -----------------------------
       - name: Cache Trivy DB
-        uses: actions/cache@6849e16b
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae
 
         with:
           path: ~/.cache/trivy
