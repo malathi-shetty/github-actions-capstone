@@ -3,6 +3,7 @@ name: Main Pipeline
 on:
   push:
     branches:
+      - main
       - test-trivy-vulns
 
   pull_request:
@@ -16,12 +17,16 @@ permissions:
   security-events: write
   pull-requests: write
 
+# =========================================================
+# PIPELINE FLOW
+# build-test → docker → trivy-scan → security-dashboard → security-gate → deploy
+# =========================================================
 
 jobs:
 
-# =========================================
-# 1. BUILD + TEST
-# =========================================
+# =========================================================
+# 1. BUILD & TEST
+# =========================================================
   build-test:
     name: Build & Test
     uses: ./.github/workflows/reusable-build-test.yml
@@ -31,9 +36,9 @@ jobs:
       run_tests: true
 
 
-# =========================================
+# =========================================================
 # 2. DOCKER BUILD
-# =========================================
+# =========================================================
   docker:
     name: Docker Build
     needs: build-test
@@ -50,24 +55,27 @@ jobs:
       docker_token: ${{ secrets.DOCKER_TOKEN }}
 
 
-# =========================================
-# 3. TRIVY SCAN (SECURITY LAYER)
-# =========================================
+# =========================================================
+# 3. TRIVY SCAN (SECURITY ENGINE)
+# =========================================================
   trivy-scan:
     name: Trivy Scan
     needs: docker
     runs-on: ubuntu-latest
 
+    permissions:
+      contents: read
+      security-events: write
+      pull-requests: write
+
     steps:
 
-      - name: Install Trivy + jq
+      - name: Install Tools
         run: |
           sudo apt-get update
           sudo apt-get install -y jq trivy
 
-      # =========================
-      # CACHE (FASTER SCANS)
-      # =========================
+      # ---------------- CACHE ----------------
       - name: Cache Trivy DB
         uses: actions/cache@v4
         with:
@@ -76,10 +84,8 @@ jobs:
           restore-keys: |
             trivy-db-${{ runner.os }}-
 
-      # =========================
-      # JSON SCAN
-      # =========================
-      - name: Run JSON Scan
+      # ---------------- JSON SCAN ----------------
+      - name: JSON Scan
         run: |
           trivy image \
             --severity HIGH,CRITICAL \
@@ -88,10 +94,8 @@ jobs:
             --output trivy.json \
             shettymalathi113/github-actions-capstone:v1.0.${{ github.run_number }}
 
-      # =========================
-      # SARIF SCAN
-      # =========================
-      - name: Run SARIF Scan
+      # ---------------- SARIF SCAN ----------------
+      - name: SARIF Scan
         run: |
           trivy image \
             --severity HIGH,CRITICAL \
@@ -100,9 +104,7 @@ jobs:
             --output trivy-results.sarif \
             shettymalathi113/github-actions-capstone:v1.0.${{ github.run_number }}
 
-      # =========================
-      # UPLOAD ARTIFACTS
-      # =========================
+      # ---------------- ARTIFACTS ----------------
       - uses: actions/upload-artifact@v4
         with:
           name: trivy-json
@@ -113,104 +115,25 @@ jobs:
           name: trivy-sarif
           path: trivy-results.sarif
 
-      # =========================
-      # SARIF → SECURITY TAB
-      # =========================
+      # ---------------- SARIF UPLOAD ----------------
       - name: Upload SARIF
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: trivy-results.sarif
 
-      # =========================
-      # PR ANNOTATIONS
-      # =========================
+      # ---------------- PR ANNOTATIONS ----------------
       - name: SARIF PR Annotations
         if: github.event_name == 'pull_request'
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: trivy-results.sarif
 
-      # =========================
-      # SARIF GATE (FAIL FAST)
-      # =========================
-      - name: SARIF Security Gate
-        run: |
-          COUNT=$(jq '[.runs[].results[]? | select(.level=="error")] | length' trivy-results.sarif)
 
-          echo "SARIF Critical Issues: $COUNT"
-
-          if [ "$COUNT" -gt 0 ]; then
-            echo "❌ BLOCKED by SARIF Gate"
-            exit 1
-          fi
-
-
-# =========================================
-# 4. REPORT GENERATION
-# =========================================
-  generate-reports:
-    name: Generate Reports
-    needs: trivy-scan
-    runs-on: ubuntu-latest
-
-    steps:
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: trivy-json
-
-      - name: Build Reports
-        run: |
-          echo "## 📦 Vulnerability Report" > trivy.md
-
-          jq -r '.Results[]?.Vulnerabilities[]? |
-          "| \(.Severity) | \(.PkgName) | \(.VulnerabilityID) | \(.InstalledVersion) | \(.FixedVersion // "N/A") |"' \
-          trivy.json >> trivy.md
-
-          echo "## 🤖 AI Notes" > ai.md
-          echo "- Automated security scan completed" >> ai.md
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: reports
-          path: |
-            trivy.md
-            ai.md
-
-
-# =========================================
-# 5. SECURITY GATE (JSON)
-# =========================================
-  security-gate:
-    name: Security Gate
-    needs: generate-reports
-    runs-on: ubuntu-latest
-
-    steps:
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: trivy-json
-
-      - name: Evaluate
-        run: |
-          CRITICAL=$(jq '[.Results[].Vulnerabilities[]? | select(.Severity=="CRITICAL")] | length' trivy.json)
-          HIGH=$(jq '[.Results[].Vulnerabilities[]? | select(.Severity=="HIGH")] | length' trivy.json)
-
-          echo "CRITICAL=$CRITICAL"
-          echo "HIGH=$HIGH"
-
-          if [ "$CRITICAL" -gt 0 ] || [ "$HIGH" -gt 0 ]; then
-            echo "❌ BLOCKED"
-            exit 1
-          fi
-
-
-# =========================================
-# 6. 🚀 ENTERPRISE SECURITY DASHBOARD (HTML + SCORE + LAYERS)
-# =========================================
+# =========================================================
+# 4. SECURITY DASHBOARD (PARALLEL VISUAL ENGINE)
+# =========================================================
   security-dashboard:
-    name: Security Dashboard (Enterprise)
+    name: Security Dashboard
     needs: trivy-scan
     runs-on: ubuntu-latest
 
@@ -220,108 +143,93 @@ jobs:
         with:
           name: trivy-json
 
-      # =========================
-      # SECURITY METRICS
-      # =========================
-      - name: Compute Metrics
+      # ---------------- SCORE ----------------
+      - name: Security Score
         run: |
           CRITICAL=$(jq '[.Results[].Vulnerabilities[]? | select(.Severity=="CRITICAL")] | length' trivy.json)
           HIGH=$(jq '[.Results[].Vulnerabilities[]? | select(.Severity=="HIGH")] | length' trivy.json)
-          MEDIUM=$(jq '[.Results[].Vulnerabilities[]? | select(.Severity=="MEDIUM")] | length' trivy.json)
 
-          SCORE=$((100 - (CRITICAL*10 + HIGH*5 + MEDIUM*2)))
+          SCORE=$((100 - (CRITICAL*25 + HIGH*10)))
           if [ "$SCORE" -lt 0 ]; then SCORE=0; fi
 
-          echo $CRITICAL > critical.txt
-          echo $HIGH > high.txt
-          echo $MEDIUM > medium.txt
-          echo $SCORE > score.txt
+          echo "Security Score: $SCORE/100"
+          echo "SCORE=$SCORE" >> $GITHUB_ENV
 
-      # =========================
-      # DOCKER LAYER BREAKDOWN
-      # =========================
-      - name: Docker Layers
+      # ---------------- CVE GROUPING ----------------
+      - name: CVE Grouping
         run: |
-          docker pull shettymalathi113/github-actions-capstone:v1.0.${{ github.run_number }}
-          docker history --no-trunc \
-            shettymalathi113/github-actions-capstone:v1.0.${{ github.run_number }} \
-            > layers.txt
+          echo "CRITICAL CVEs:"
+          jq -r '.Results[].Vulnerabilities[]? | select(.Severity=="CRITICAL") | .VulnerabilityID' trivy.json | sort | uniq
 
-      # =========================
-      # HTML REPORT GENERATION
-      # =========================
-      - name: Build HTML Dashboard
+          echo "HIGH CVEs:"
+          jq -r '.Results[].Vulnerabilities[]? | select(.Severity=="HIGH") | .VulnerabilityID' trivy.json | sort | uniq
+
+      # ---------------- DOCKER LAYERS ----------------
+      - name: Docker Layer Breakdown
         run: |
-          CRITICAL=$(cat critical.txt)
-          HIGH=$(cat high.txt)
-          MEDIUM=$(cat medium.txt)
-          SCORE=$(cat score.txt)
+          echo "Layer-wise issues"
+          jq -r '.Results[].Vulnerabilities[]? |
+            .PkgName + " in " + (.PkgPath // "base image")' trivy.json | head -20
 
+      # ---------------- HTML REPORT ----------------
+      - name: Generate HTML Dashboard
+        run: |
           cat <<EOF > security-dashboard.html
           <html>
-          <head>
-            <title>Security Dashboard</title>
-            <style>
-              body { font-family: Arial; background:#0d1117; color:white; padding:20px; }
-              .card { background:#161b22; padding:15px; margin:10px; border-radius:10px; }
-              .score { font-size:40px; color:#58a6ff; }
-            </style>
-          </head>
-
+          <head><title>Security Dashboard</title></head>
           <body>
-
-          <h1>🔐 Enterprise Security Dashboard</h1>
-
-          <div class="card">
-            <h2>Security Score</h2>
-            <div class="score">$SCORE / 100</div>
-          </div>
-
-          <div class="card">
-            <h2>CVE Summary</h2>
-            <p>Critical: $CRITICAL</p>
-            <p>High: $HIGH</p>
-            <p>Medium: $MEDIUM</p>
-          </div>
-
-          <div class="card">
-            <h2>🐳 Docker Layers</h2>
-            <pre>
-$(cat layers.txt | head -20)
-            </pre>
-          </div>
-
-          <div class="card">
+          <h1>Trivy Security Dashboard</h1>
+          <h2>Score: $SCORE / 100</h2>
+          <h3>Critical Issues</h3>
+          <pre>$(jq '.Results[].Vulnerabilities[]? | select(.Severity=="CRITICAL")' trivy.json)</pre>
+          <h3>High Issues</h3>
+          <pre>$(jq '.Results[].Vulnerabilities[]? | select(.Severity=="HIGH")' trivy.json)</pre>
+          </body>
+          </html>
           EOF
 
-          if [ "$CRITICAL" -gt 0 ]; then
-            echo "<h2 style='color:red'>❌ BLOCKED</h2>" >> security-dashboard.html
-          else
-            echo "<h2 style='color:green'>✅ CLEAN</h2>" >> security-dashboard.html
-          fi
-
-          echo "</div></body></html>" >> security-dashboard.html
-
-      # =========================
-      # UPLOAD HTML REPORT
-      # =========================
-      - name: Upload HTML Dashboard
-        uses: actions/upload-artifact@v4
+      # ---------------- UPLOAD HTML ----------------
+      - uses: actions/upload-artifact@v4
         with:
-          name: security-dashboard-html
+          name: security-dashboard
           path: security-dashboard.html
 
 
-# =========================================
-# 7. DEPLOY
-# =========================================
+# =========================================================
+# 5. SECURITY GATE (FAIL PIPELINE)
+# =========================================================
+  security-gate:
+    name: Security Gate
+    needs: trivy-scan
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: trivy-json
+
+      - name: Fail Gate
+        run: |
+          CRITICAL=$(jq '[.Results[].Vulnerabilities[]? | select(.Severity=="CRITICAL")] | length' trivy.json)
+          HIGH=$(jq '[.Results[].Vulnerabilities[]? | select(.Severity=="HIGH")] | length' trivy.json)
+
+          if [ "$CRITICAL" -gt 0 ] || [ "$HIGH" -gt 0 ]; then
+            echo "BLOCKED"
+            exit 1
+          fi
+
+
+# =========================================================
+# 6. DEPLOY
+# =========================================================
   deploy:
     name: Deploy
     needs: security-gate
     runs-on: ubuntu-latest
 
     steps:
-      - name: Deploy App
+      - name: Deploy
         run: |
-          echo "Deploying IMAGE"
-          echo "Success 🚀"
+          echo "Deploying v1.0.${{ github.run_number }}"
+          echo "Application LIVE 🚀"
