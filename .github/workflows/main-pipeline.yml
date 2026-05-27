@@ -30,7 +30,6 @@ jobs:
   build-test:
     name: Build & Test
     uses: ./.github/workflows/reusable-build-test.yml
-
     with:
       node_version: "20"
       run_tests: true
@@ -56,7 +55,7 @@ jobs:
 
 
 # =========================================================
-# 3. TRIVY SCAN (SECURITY LAYER)
+# 3. TRIVY SCAN
 # =========================================================
   trivy-scan:
     name: Trivy Scan
@@ -91,8 +90,10 @@ jobs:
           key: trivy-db-${{ runner.os }}
           restore-keys: trivy-db-${{ runner.os }}-
 
-      # ---------------- JSON SCAN ----------------
-      - name: JSON Scan
+      # =====================================================
+      # JSON SCAN
+      # =====================================================
+      - name: Run JSON Scan
         run: |
           trivy image \
             --severity HIGH,CRITICAL \
@@ -101,8 +102,10 @@ jobs:
             --output trivy.json \
             shettymalathi113/github-actions-capstone:v1.0.${{ github.run_number }}
 
-      # ---------------- SARIF SCAN ----------------
-      - name: SARIF Scan
+      # =====================================================
+      # SARIF SCAN
+      # =====================================================
+      - name: Run SARIF Scan
         run: |
           trivy image \
             --severity HIGH,CRITICAL \
@@ -111,7 +114,6 @@ jobs:
             --output trivy-results.sarif \
             shettymalathi113/github-actions-capstone:v1.0.${{ github.run_number }}
 
-      # ---------------- ARTIFACTS ----------------
       - uses: actions/upload-artifact@v4
         with:
           name: trivy-json
@@ -122,23 +124,25 @@ jobs:
           name: trivy-sarif
           path: trivy-results.sarif
 
-      # ---------------- SARIF UPLOAD ----------------
+      # =====================================================
+      # SARIF (v4 FIX)
+      # =====================================================
       - name: Upload SARIF
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-results.sarif
         continue-on-error: true
 
       - name: PR Annotations
         if: github.event_name == 'pull_request'
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-results.sarif
         continue-on-error: true
 
 
 # =========================================================
-# 4. SECURITY DASHBOARD (ENTERPRISE + SUMMARY + HTML)
+# 4. SECURITY DASHBOARD
 # =========================================================
   security-dashboard:
     name: Security Dashboard
@@ -163,7 +167,9 @@ jobs:
             echo '{"runs":[{"results":[]}]}'> trivy-results.sarif
           fi
 
-      # ---------------- METRICS ----------------
+      # =====================================================
+      # METRICS
+      # =====================================================
       - name: Compute Metrics
         run: |
           CRITICAL=$(jq '[.Results[].Vulnerabilities[]? | select(.Severity=="CRITICAL")] | length' trivy.json)
@@ -176,36 +182,45 @@ jobs:
           echo "HIGH=$HIGH" >> $GITHUB_ENV
           echo "SCORE=$SCORE" >> $GITHUB_ENV
 
-      # ---------------- STEP SUMMARY ----------------
-      - name: GitHub Summary
+      # =====================================================
+      # FULL SUMMARY TABLE (RESTORED)
+      # =====================================================
+      - name: Security Dashboard Summary
         run: |
-          echo "## 🔐 Enterprise Security Dashboard" >> $GITHUB_STEP_SUMMARY
-          echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
-          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Critical | $CRITICAL |" >> $GITHUB_STEP_SUMMARY
-          echo "| High | $HIGH |" >> $GITHUB_STEP_SUMMARY
-          echo "| Score | $SCORE / 100 |" >> $GITHUB_STEP_SUMMARY
+          echo "## 🔐 Security Dashboard Summary" >> $GITHUB_STEP_SUMMARY
 
-      # ---------------- CVE GROUPING ----------------
-      - name: CVE Grouping
-        run: |
-          echo "CRITICAL CVEs:" > cves.txt
-          jq -r '.Results[].Vulnerabilities[]? | select(.Severity=="CRITICAL") | .VulnerabilityID' trivy.json | sort -u >> cves.txt
+          echo "### 📦 JSON Scan Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- Critical: $CRITICAL" >> $GITHUB_STEP_SUMMARY
+          echo "- High: $HIGH" >> $GITHUB_STEP_SUMMARY
 
-          echo "HIGH CVEs:" >> cves.txt
-          jq -r '.Results[].Vulnerabilities[]? | select(.Severity=="HIGH") | .VulnerabilityID' trivy.json | sort -u >> cves.txt
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🐳 Image Info" >> $GITHUB_STEP_SUMMARY
+          echo "- Image: shettymalathi113/github-actions-capstone" >> $GITHUB_STEP_SUMMARY
+          echo "- Build: v1.0.${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Commit: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
 
-      # ---------------- LAYER VIEW ----------------
-      - name: Docker Layer Breakdown
-        run: |
-          jq -r '.Results[].Vulnerabilities[]? |
-            .PkgName + " → " + (.PkgPath // "base-image")' trivy.json | head -20
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📦 Top Vulnerable Packages" >> $GITHUB_STEP_SUMMARY
+          jq -r '.Results[].Vulnerabilities[]? | .PkgName' trivy.json \
+          | sort | uniq -c | sort -nr | head -10 \
+          | while read count pkg; do
+              echo "- $pkg → $count issues" >> $GITHUB_STEP_SUMMARY
+            done
 
-      # ---------------- HTML DASHBOARD ----------------
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "$CRITICAL" -gt 0 ] || [ "$HIGH" -gt 0 ]; then
+            echo "❌ SECURITY STATUS: BLOCKED" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "✅ SECURITY STATUS: CLEAN" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      # =====================================================
+      # HTML DASHBOARD
+      # =====================================================
       - name: Generate HTML Dashboard
         run: |
           echo "<html><body>" > security-dashboard.html
-          echo "<h1>Enterprise Security Dashboard</h1>" >> security-dashboard.html
+          echo "<h1>Trivy Security Dashboard</h1>" >> security-dashboard.html
           echo "<h2>Security Score: $SCORE / 100</h2>" >> security-dashboard.html
 
           echo "<h3>Critical Vulnerabilities</h3><pre>" >> security-dashboard.html
