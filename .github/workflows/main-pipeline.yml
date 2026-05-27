@@ -15,26 +15,18 @@ permissions:
 jobs:
 
 # =========================================================
-# STAGE 1: BUILD + TEST (VISIBLE FLOW)
+# STAGE 1: BUILD + TEST
 # =========================================================
   build-test:
     name: Build & Test
     uses: ./.github/workflows/reusable-build-test.yml
-
     with:
       node_version: "20"
       run_tests: true
 
-    steps:
-      - name: Pipeline Trace - Build Start
-        run: |
-          echo "======================================"
-          echo "BUILD-TEST STAGE STARTING"
-          echo "Running unit tests + build"
-          echo "======================================"
 
 # =========================================================
-# STAGE 2: DOCKER BUILD (VISIBLE FLOW)
+# STAGE 2: DOCKER BUILD
 # =========================================================
   docker:
     name: Docker Build
@@ -51,19 +43,9 @@ jobs:
       docker_username: ${{ secrets.DOCKER_USERNAME }}
       docker_token: ${{ secrets.DOCKER_TOKEN }}
 
-    steps:
-      - name: Docker Pipeline Trace
-        run: |
-          echo "======================================"
-          echo "DOCKER STAGE STARTING"
-          echo "Building Docker image"
-          echo "Tag: v1.0.${{ github.run_number }}"
-          echo "SHA: ${{ github.sha }}"
-          echo "Pushing to registry: ENABLED"
-          echo "======================================"
 
 # =========================================================
-# STAGE 3: TRIVY SCAN (DETAILED VISIBILITY)
+# STAGE 3: TRIVY SCAN (FULL VISIBILITY)
 # =========================================================
   trivy-scan:
     name: Run Trivy Scan
@@ -76,21 +58,22 @@ jobs:
 
     steps:
 
-      - name: Install Trivy (TRACE)
+      - name: Checkout pipeline context
+        uses: actions/checkout@v4
+
+      - name: Install Trivy
         run: |
           echo "::group::Installing Security Tools"
-          echo "Installing Trivy + jq"
           sudo apt-get update
           sudo apt-get install -y wget jq trivy
-          echo "Trivy installed successfully"
+          echo "Trivy installed"
           echo "::endgroup::"
 
       - name: Run JSON Vulnerability Scan
         run: |
           echo "::group::TRIVY JSON SCAN"
-          echo "Scanning Docker image (HIGH + CRITICAL)"
-          echo "Output → trivy.json"
 
+          echo "Scanning image..."
           trivy image \
             --severity HIGH,CRITICAL \
             --ignore-unfixed \
@@ -105,7 +88,6 @@ jobs:
       - name: Run SARIF Scan
         run: |
           echo "::group::TRIVY SARIF SCAN"
-          echo "Generating SARIF for GitHub Security tab"
 
           trivy image \
             --severity HIGH,CRITICAL \
@@ -119,24 +101,20 @@ jobs:
           echo "::endgroup::"
 
       - name: Upload JSON Artifact
-        run: echo "Uploading trivy.json artifact..."
-
-      - uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4
         with:
           name: trivy-json
           path: trivy.json
 
       - name: Upload SARIF Artifact
-        run: echo "Uploading trivy.sarif artifact..."
-
-      - uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4
         with:
           name: trivy-sarif
           path: trivy.sarif
 
 
 # =========================================================
-# STAGE 4: REPORT GENERATION (VISIBLE PROCESSING)
+# STAGE 4: REPORT GENERATION
 # =========================================================
   generate-reports:
     name: Generate Reports
@@ -146,19 +124,15 @@ jobs:
     steps:
 
       - name: Download Artifact
-        run: echo "Fetching trivy.json from artifacts"
-
-      - uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v4
         with:
           name: trivy-json
 
-      - name: Generate Markdown + AI Report
+      - name: Generate Reports
         run: |
           echo "::group::REPORT GENERATION"
 
-          echo "Building trivy.md report..."
-          echo "Parsing JSON vulnerabilities via jq"
-
+          echo "Building trivy.md..."
           echo "## Trivy Report" > trivy.md
 
           jq -r '.Results[]?.Vulnerabilities[]? |
@@ -168,17 +142,12 @@ jobs:
           echo "Generating AI summary..."
           echo "## AI Notes" > ai.md
           echo "- Scan completed successfully" >> ai.md
-          echo "- Report generated from Trivy JSON output" >> ai.md
 
-          echo "REPORTS CREATED:"
           ls -lh trivy.md ai.md
-
           echo "::endgroup::"
 
       - name: Upload Reports
-        run: echo "Uploading reports artifact..."
-
-      - uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4
         with:
           name: reports
           path: |
@@ -187,7 +156,7 @@ jobs:
 
 
 # =========================================================
-# STAGE 5: SECURITY GATE (REAL DECISION VISIBILITY)
+# STAGE 5: SECURITY GATE
 # =========================================================
   security-gate:
     name: Security Gate
@@ -203,28 +172,25 @@ jobs:
 
       - name: Evaluate Security Policy
         run: |
-          echo "::group::SECURITY GATE CHECK"
-
-          echo "Counting vulnerabilities..."
+          echo "::group::SECURITY GATE"
 
           CRITICAL=$(jq '[.Results[].Vulnerabilities[]? | select(.Severity=="CRITICAL")] | length' trivy.json)
           HIGH=$(jq '[.Results[].Vulnerabilities[]? | select(.Severity=="HIGH")] | length' trivy.json)
 
-          echo "CRITICAL FOUND: $CRITICAL"
-          echo "HIGH FOUND: $HIGH"
+          echo "CRITICAL: $CRITICAL"
+          echo "HIGH: $HIGH"
 
           if [ "$CRITICAL" -gt 0 ] || [ "$HIGH" -gt 0 ]; then
-            echo "❌ SECURITY GATE FAILED"
-            echo "Blocking deployment due to vulnerabilities"
+            echo "❌ BLOCKED"
             exit 1
           fi
 
-          echo "✅ SECURITY GATE PASSED"
+          echo "✅ PASSED"
           echo "::endgroup::"
 
 
 # =========================================================
-# STAGE 6: DEPLOYMENT (FINAL TRACEABLE STEP)
+# STAGE 6: DEPLOY
 # =========================================================
   deploy:
     name: Deploy
@@ -232,18 +198,16 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Deployment Start Trace
+
+      - name: Deploy Start
         run: |
           echo "======================================"
-          echo "DEPLOYMENT STAGE STARTED"
-          echo "Fetching approved image..."
-          echo "Deploying to production..."
+          echo "DEPLOYMENT STARTING"
           echo "======================================"
 
       - name: Deploy App
         run: |
-          echo "::group::DEPLOYMENT EXECUTION"
-          echo "Deploying IMAGE: v1.0.${{ github.run_number }}"
-          echo "Status: LIVE"
-          echo "Application successfully deployed"
+          echo "::group::DEPLOYMENT"
+          echo "Deploying v1.0.${{ github.run_number }}"
+          echo "STATUS: LIVE"
           echo "::endgroup::"
