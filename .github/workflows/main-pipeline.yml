@@ -48,6 +48,7 @@ jobs:
 
     steps:
       - name: Validate Docker Secrets
+        if: github.actor != 'dependabot[bot]'      
         run: |
           if [ -z "${{ secrets.DOCKER_USERNAME }}" ] || [ -z "${{ secrets.DOCKER_TOKEN }}" ]; then
             echo "❌ Missing Docker secrets"
