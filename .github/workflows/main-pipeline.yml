@@ -2,12 +2,10 @@ name: Main Pipeline
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
 
   pull_request:
-    branches:
-      - main
+    branches: [main]
 
   workflow_dispatch:
 
@@ -18,27 +16,10 @@ permissions:
 
 # =========================================================
 # FLOW
-# build-test → docker → trivy-scan → reports → dashboard → gate → deploy
+# build-test → docker → trivy → reports → dashboard → gate → deploy
 # =========================================================
 
 jobs:
-
-# =========================================================
-# 🧠 SHA AUDIT (DOCUMENTATION / TRACEABILITY)
-# =========================================================
-  sha-audit:
-    name: SHA Audit (Pinned Actions Reference)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Show pinned SHAs
-        run: |
-          echo "===== PINNED ACTIONS USED IN PIPELINE ====="
-          echo "actions/checkout → b4ffde65f46336ab88eb53be808477a3936bae11 (v4.1.1)"
-          echo "actions/cache → 0c457cd6b70a6a6a7e4b2c2b8c8a9a3d6c1a2b3c (v4.0.2)"
-          echo "actions/upload-artifact → 50769540e7f4bd5e21e526ee35c689e35e0d6874 (v4.4.0)"
-          echo "actions/download-artifact → fa0a91b85d4f404e444e00e005971372dc801d16 (v4.1.8)"
-          echo "github/codeql-action/upload-sarif → b7c7d2f6c3a9e2f1d8a9c6f2b3d4e5f67890abcd (verify latest)"
-          echo "============================================="
 
 # =========================================================
 # 1. BUILD & TEST
@@ -46,7 +27,6 @@ jobs:
   build-test:
     name: Build & Test
     uses: ./.github/workflows/reusable-build-test.yml
-
     with:
       node_version: "20"
       run_tests: true
@@ -59,34 +39,27 @@ jobs:
     name: Docker Build
     needs: build-test
     uses: ./.github/workflows/reusable-docker.yml
-
     with:
       image_name: "shettymalathi113/github-actions-capstone"
       tag: v1.0.${{ github.run_number }}
       sha_tag: sha-${{ github.sha }}
       push: true
-
     secrets:
       docker_username: ${{ secrets.DOCKER_USERNAME }}
       docker_token: ${{ secrets.DOCKER_TOKEN }}
 
 
 # =========================================================
-# 3. TRIVY SCAN (PINNED ACTIONS)
+# 3. TRIVY SCAN
 # =========================================================
   trivy-scan:
     name: Trivy Scan
     needs: docker
     runs-on: ubuntu-latest
 
-    permissions:
-      contents: read
-      security-events: write
-      pull-requests: write
-
     steps:
 
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
 
       - name: Install Tools
@@ -132,8 +105,8 @@ jobs:
           name: trivy-sarif
           path: trivy-results.sarif
 
-      - name: Upload SARIF
-        uses: github/codeql-action/upload-sarif@b7c7d2f6c3a9e2f1d8a9c6f2b3d4e5f67890abcd
+      - name: Upload SARIF to Security Tab
+        uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: trivy-results.sarif
 
@@ -155,7 +128,6 @@ jobs:
       - name: Build Reports
         run: |
           echo "## 📦 Trivy Report" > trivy.md
-
           jq -r '.Results[]?.Vulnerabilities[]? |
           "| \(.Severity) | \(.PkgName) | \(.VulnerabilityID) | \(.InstalledVersion) | \(.FixedVersion // "N/A") |"' \
           trivy.json >> trivy.md
@@ -195,6 +167,14 @@ jobs:
           echo "- Critical: $CRITICAL" >> $GITHUB_STEP_SUMMARY
           echo "- High: $HIGH" >> $GITHUB_STEP_SUMMARY
 
+      - name: SHA + Security Summary
+        run: |
+          echo "## 🧾 SHA & Security Report" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Commit SHA | ${{ github.sha }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Run Number | ${{ github.run_number }} |" >> $GITHUB_STEP_SUMMARY
+
 
 # =========================================================
 # 6. SECURITY GATE
@@ -205,7 +185,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-
       - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
         with:
           name: trivy-json
