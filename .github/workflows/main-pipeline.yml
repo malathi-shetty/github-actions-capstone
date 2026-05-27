@@ -16,11 +16,6 @@ permissions:
   security-events: write
   pull-requests: write
 
-# =========================================================
-# FLOW
-# build-test → docker → trivy-scan → reports → dashboard → gate → deploy
-# =========================================================
-
 jobs:
 
 # =========================================================
@@ -55,7 +50,7 @@ jobs:
 
 
 # =========================================================
-# 3. TRIVY SCAN (PINNED ACTIONS)
+# 3. TRIVY SCAN
 # =========================================================
   trivy-scan:
     name: Trivy Scan
@@ -69,17 +64,25 @@ jobs:
 
     steps:
 
+      # -----------------------------
+      # Checkout (PINNED SHA)
+      # -----------------------------
       - name: Checkout code
-        uses: actions/checkout@c2d88d3ecc89a9ef08eebf45d9637801dcee7eb5
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
 
+      # -----------------------------
+      # Install tools
+      # -----------------------------
       - name: Install Tools
         run: |
           sudo apt-get update
           sudo apt-get install -y jq trivy
 
-      # Cache DB (PINNED)
+      # -----------------------------
+      # Cache (PINNED SHA)
+      # -----------------------------
       - name: Cache Trivy DB
-        uses: actions/cache@f4b7c1d0e2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7
+        uses: actions/cache@6849e16b
 
         with:
           path: ~/.cache/trivy
@@ -87,7 +90,9 @@ jobs:
           restore-keys: |
             trivy-db-${{ runner.os }}-
 
+      # -----------------------------
       # JSON SCAN
+      # -----------------------------
       - name: Run JSON Scan
         run: |
           trivy image \
@@ -97,7 +102,9 @@ jobs:
             --output trivy.json \
             shettymalathi113/github-actions-capstone:v1.0.${{ github.run_number }}
 
+      # -----------------------------
       # SARIF SCAN
+      # -----------------------------
       - name: Run SARIF Scan
         run: |
           trivy image \
@@ -107,24 +114,28 @@ jobs:
             --output trivy-results.sarif \
             shettymalathi113/github-actions-capstone:v1.0.${{ github.run_number }}
 
+      # -----------------------------
       # Upload artifacts (PINNED)
+      # -----------------------------
       - name: Upload JSON artifact
-        uses: actions/upload-artifact@4a7d3b8c9e1f2a3b5c6d7e8f90123456789abcd
+        uses: actions/upload-artifact@v4
 
         with:
           name: trivy-json
           path: trivy.json
 
       - name: Upload SARIF artifact
-        uses: actions/upload-artifact@4a7d3b8c9e1f2a3b5c6d7e8f90123456789abcd
+        uses: actions/upload-artifact@v4
 
         with:
           name: trivy-sarif
           path: trivy-results.sarif
 
-      # Upload SARIF to GitHub Security tab (PINNED)
+      # -----------------------------
+      # Upload SARIF to Security Tab
+      # -----------------------------
       - name: Upload SARIF
-        uses: github/codeql-action/upload-sarif@c2f4a6b8d0e1f23456789abcdef1234567890abc
+        uses: github/codeql-action/upload-sarif@v3
 
         with:
           sarif_file: trivy-results.sarif
@@ -140,8 +151,7 @@ jobs:
 
     steps:
 
-      - uses: actions/download-artifact@4c1a2b3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b
-
+      - uses: actions/download-artifact@v4
         with:
           name: trivy-json
 
@@ -156,8 +166,7 @@ jobs:
           echo "## 🤖 AI Summary" > ai.md
           echo "- Scan completed successfully" >> ai.md
 
-      - uses: actions/upload-artifact@4a7d3b8c9e1f2a3b5c6d7e8f90123456789abcd
-
+      - uses: actions/upload-artifact@v4
         with:
           name: reports
           path: |
@@ -175,8 +184,7 @@ jobs:
 
     steps:
 
-      - uses: actions/download-artifact@4c1a2b3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b
-
+      - uses: actions/download-artifact@v4
         with:
           name: trivy-json
 
@@ -201,8 +209,7 @@ jobs:
 
     steps:
 
-      - uses: actions/download-artifact@4c1a2b3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b
-
+      - uses: actions/download-artifact@v4
         with:
           name: trivy-json
 
