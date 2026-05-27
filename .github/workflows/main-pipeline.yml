@@ -18,16 +18,17 @@ permissions:
 
 # =========================================================
 # FLOW
-# build-test → docker → trivy-scan → (parallel dashboards) → gate → deploy
+# build-test → docker → trivy-scan → reports → dashboard → gate → deploy
 # =========================================================
 
 jobs:
 
-# =========================================================
-# 1. BUILD & TEST
-# =========================================================
+  # =========================================================
+  # 1. BUILD & TEST
+  # =========================================================
   build-test:
     name: Build & Test
+
     uses: ./.github/workflows/reusable-build-test.yml
 
     with:
@@ -35,12 +36,20 @@ jobs:
       run_tests: true
 
 
-# =========================================================
-# 2. DOCKER BUILD
-# =========================================================
+  # =========================================================
+  # 2. DOCKER BUILD
+  # =========================================================
   docker:
     name: Docker Build
+
+    # Skip Docker push for Dependabot
+    if: |
+      github.actor != 'dependabot[bot]' &&
+      secrets.DOCKER_USERNAME != '' &&
+      secrets.DOCKER_TOKEN != ''
+
     needs: build-test
+
     uses: ./.github/workflows/reusable-docker.yml
 
     with:
@@ -54,11 +63,14 @@ jobs:
       docker_token: ${{ secrets.DOCKER_TOKEN }}
 
 
-# =========================================================
-# 3. TRIVY SCAN (PRODUCER JOB)
-# =========================================================
+  # =========================================================
+  # 3. TRIVY SCAN
+  # =========================================================
   trivy-scan:
     name: Trivy Scan
+
+    if: needs.docker.result == 'success'
+
     needs: docker
     runs-on: ubuntu-latest
 
@@ -69,21 +81,28 @@ jobs:
 
     steps:
 
+      # Checkout
+      - name: Checkout code
+        uses: actions/checkout@c2d88d3ecc89a9ef08eebf45d9637801dcee7eb5
+
+      # Install tools
       - name: Install Tools
         run: |
           sudo apt-get update
           sudo apt-get install -y jq trivy
 
-      # Cache DB (faster scans)
+      # Cache Trivy DB
       - name: Cache Trivy DB
-        uses: actions/cache@v4
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae
+
         with:
           path: ~/.cache/trivy
           key: trivy-db-${{ runner.os }}
+
           restore-keys: |
             trivy-db-${{ runner.os }}-
 
-      # JSON SCAN
+      # JSON Scan
       - name: Run JSON Scan
         run: |
           trivy image \
@@ -93,7 +112,7 @@ jobs:
             --output trivy.json \
             shettymalathi113/github-actions-capstone:v1.0.${{ github.run_number }}
 
-      # SARIF SCAN
+      # SARIF Scan
       - name: Run SARIF Scan
         run: |
           trivy image \
@@ -103,27 +122,35 @@ jobs:
             --output trivy-results.sarif \
             shettymalathi113/github-actions-capstone:v1.0.${{ github.run_number }}
 
-      # Upload artifacts (SHARED SOURCE)
-      - uses: actions/upload-artifact@v4
+      # Upload JSON Artifact
+      - name: Upload JSON Artifact
+        uses: actions/upload-artifact@v4
+
         with:
           name: trivy-json
           path: trivy.json
 
-      - uses: actions/upload-artifact@v4
+      # Upload SARIF Artifact
+      - name: Upload SARIF Artifact
+        uses: actions/upload-artifact@v4
+
         with:
           name: trivy-sarif
           path: trivy-results.sarif
 
-      # Security tab upload
+      # Upload SARIF to Security Tab
       - name: Upload SARIF
         uses: github/codeql-action/upload-sarif@v3
+
         with:
           sarif_file: trivy-results.sarif
 
       # PR annotations
       - name: SARIF PR Annotations
         if: github.event_name == 'pull_request'
+
         uses: github/codeql-action/upload-sarif@v3
+
         with:
           sarif_file: trivy-results.sarif
 
@@ -140,17 +167,22 @@ jobs:
           fi
 
 
-# =========================================================
-# 4. REPORTS (PARALLEL - FIXED)
-# =========================================================
+  # =========================================================
+  # 4. REPORTS
+  # =========================================================
   generate-reports:
     name: Generate Reports
-    needs: trivy-scan   # FIXED
+
+    if: needs.trivy-scan.result == 'success'
+
+    needs: trivy-scan
     runs-on: ubuntu-latest
 
     steps:
 
-      - uses: actions/download-artifact@v4
+      - name: Download Trivy JSON
+        uses: actions/download-artifact@v4
+
         with:
           name: trivy-json
 
@@ -165,25 +197,33 @@ jobs:
           echo "## 🤖 AI Summary" > ai.md
           echo "- Scan completed successfully" >> ai.md
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload Reports
+        uses: actions/upload-artifact@v4
+
         with:
           name: reports
+
           path: |
             trivy.md
             ai.md
 
 
-# =========================================================
-# 5. SECURITY DASHBOARD (PARALLEL - FIXED)
-# =========================================================
+  # =========================================================
+  # 5. SECURITY DASHBOARD
+  # =========================================================
   security-dashboard:
     name: Security Dashboard
-    needs: trivy-scan   # FIXED
+
+    if: needs.trivy-scan.result == 'success'
+
+    needs: trivy-scan
     runs-on: ubuntu-latest
 
     steps:
 
-      - uses: actions/download-artifact@v4
+      - name: Download Trivy JSON
+        uses: actions/download-artifact@v4
+
         with:
           name: trivy-json
 
@@ -204,8 +244,8 @@ jobs:
           jq -r '.Results[].Vulnerabilities[]? | .PkgName' trivy.json \
           | sort | uniq -c | sort -nr | head -10 \
           | while read count pkg; do
-            echo "- $pkg → $count issues" >> $GITHUB_STEP_SUMMARY
-          done
+              echo "- $pkg → $count issues" >> $GITHUB_STEP_SUMMARY
+            done
 
       - name: Image Info
         run: |
@@ -225,17 +265,26 @@ jobs:
           fi
 
 
-# =========================================================
-# 6. SECURITY GATE (FINAL - FIXED DEPENDENCY)
-# =========================================================
+  # =========================================================
+  # 6. SECURITY GATE
+  # =========================================================
   security-gate:
     name: Security Gate
-    needs: [trivy-scan, generate-reports, security-dashboard]
+
+    if: needs.trivy-scan.result == 'success'
+
+    needs:
+      - trivy-scan
+      - generate-reports
+      - security-dashboard
+
     runs-on: ubuntu-latest
 
     steps:
 
-      - uses: actions/download-artifact@v4
+      - name: Download Trivy JSON
+        uses: actions/download-artifact@v4
+
         with:
           name: trivy-json
 
@@ -253,15 +302,21 @@ jobs:
           fi
 
 
-# =========================================================
-# 7. DEPLOY
-# =========================================================
+  # =========================================================
+  # 7. DEPLOY
+  # =========================================================
   deploy:
     name: Deploy
+
+    if: |
+      needs.security-gate.result == 'success' &&
+      github.actor != 'dependabot[bot]'
+
     needs: security-gate
     runs-on: ubuntu-latest
 
     steps:
+
       - name: Deploy App
         run: |
           echo "🚀 Deploying v1.0.${{ github.run_number }}"
