@@ -5,58 +5,22 @@ on:
     branches:
       - main
 
+  pull_request:
+    branches:
+      - main
+
   workflow_dispatch:
 
 permissions:
   contents: write
   security-events: write
-
+  pull-requests: write
 
 # =========================================================
 # PIPELINE FLOW (DOCUMENTATION VIEW)
 # =========================================================
-# build-test
-#   ↓
-#   ├── run tests
-#   └── build app
-#
-# docker
-#   ↓
-#   ├── build docker image
-#   └── push image to registry
-#
-# trivy-scan
-#   ↓
-#   ├── install trivy
-#   ├── run vulnerability scan (JSON)
-#   │       ├── output: trivy.json
-#   │       └── upload: trivy-json artifact
-#   │
-#   ├── run vulnerability scan (SARIF)
-#   │       ├── output: trivy.sarif
-#   │       ├── upload: trivy-sarif artifact
-#   │       └── upload: GitHub Security tab
-#
-# generate-reports
-#   ↓
-#   ├── download trivy-json artifact
-#   ├── parse JSON → build trivy.md report
-#   ├── generate AI summary (ai.md)
-#   └── upload reports artifact
-#
-# security-gate
-#   ↓
-#   ├── download trivy-json artifact
-#   ├── count HIGH vulnerabilities (jq)
-#   ├── count CRITICAL vulnerabilities (jq)
-#   └── if any found → FAIL pipeline
-#
-# deploy
-#   ↓
-#   ├── deploy docker image
-#   └── application goes live
+# build-test → docker → trivy-scan → reports → security-gate → deploy
 # =========================================================
-
 
 jobs:
 
@@ -92,7 +56,7 @@ jobs:
 
 
 # =========================================================
-# STAGE 3: TRIVY SCAN
+# STAGE 3: TRIVY SCAN (OPTIMIZED + SARIF + CACHE)
 # =========================================================
   trivy-scan:
     name: Run Trivy Scan
@@ -102,9 +66,13 @@ jobs:
     permissions:
       contents: read
       security-events: write
+      pull-requests: write
 
     steps:
 
+      # -------------------------------------------------
+      # Install Trivy
+      # -------------------------------------------------
       - name: Install Trivy
         run: |
           echo "::group::Install Trivy"
@@ -112,6 +80,20 @@ jobs:
           sudo apt-get install -y jq trivy
           echo "::endgroup::"
 
+      # -------------------------------------------------
+      # TRIVY DB CACHE (FAST SCANS)
+      # -------------------------------------------------
+      - name: Cache Trivy DB
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/trivy
+          key: trivy-db-${{ runner.os }}
+          restore-keys: |
+            trivy-db-${{ runner.os }}-
+
+      # -------------------------------------------------
+      # JSON SCAN
+      # -------------------------------------------------
       - name: Run JSON Scan
         run: |
           echo "::group::Trivy JSON Scan"
@@ -123,9 +105,11 @@ jobs:
             --output trivy.json \
             shettymalathi113/github-actions-capstone:v1.0.${{ github.run_number }}
 
-          echo "Generated: trivy.json"
           echo "::endgroup::"
 
+      # -------------------------------------------------
+      # SARIF SCAN (RENAMED FILE)
+      # -------------------------------------------------
       - name: Run SARIF Scan
         run: |
           echo "::group::Trivy SARIF Scan"
@@ -134,12 +118,14 @@ jobs:
             --severity HIGH,CRITICAL \
             --ignore-unfixed \
             --format sarif \
-            --output trivy.sarif \
+            --output trivy-results.sarif \
             shettymalathi113/github-actions-capstone:v1.0.${{ github.run_number }}
 
-          echo "Generated: trivy.sarif"
           echo "::endgroup::"
 
+      # -------------------------------------------------
+      # UPLOAD ARTIFACTS
+      # -------------------------------------------------
       - uses: actions/upload-artifact@v4
         with:
           name: trivy-json
@@ -148,7 +134,42 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: trivy-sarif
-          path: trivy.sarif
+          path: trivy-results.sarif
+
+      # -------------------------------------------------
+      # SARIF → GITHUB SECURITY TAB
+      # -------------------------------------------------
+      - name: Upload SARIF to Security Tab
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif
+
+      # -------------------------------------------------
+      # PR ANNOTATIONS (INLINE COMMENTS)
+      # -------------------------------------------------
+      - name: SARIF PR Annotations
+        uses: github/codeql-action/upload-sarif@v3
+        if: github.event_name == 'pull_request'
+        with:
+          sarif_file: trivy-results.sarif
+
+      # -------------------------------------------------
+      # SARIF SECURITY GATE (FAIL PIPELINE)
+      # -------------------------------------------------
+      - name: SARIF Security Gate
+        run: |
+          echo "::group::SARIF Security Gate"
+
+          COUNT=$(jq '[.runs[].results[]? | select(.level=="error")] | length' trivy-results.sarif)
+
+          echo "CRITICAL/HIGH (SARIF): $COUNT"
+
+          if [ "$COUNT" -gt 0 ]; then
+            echo "❌ SARIF SECURITY GATE FAILED"
+            exit 1
+          fi
+
+          echo "::endgroup::"
 
 
 # =========================================================
@@ -167,20 +188,14 @@ jobs:
 
       - name: Build Reports
         run: |
-          echo "::group::Report Generation"
-
-          echo "Creating trivy.md..."
           echo "## Trivy Report" > trivy.md
 
           jq -r '.Results[]?.Vulnerabilities[]? |
           "| \(.Severity) | \(.PkgName) | \(.VulnerabilityID) | \(.InstalledVersion) | \(.FixedVersion // "N/A") |"' \
           trivy.json >> trivy.md
 
-          echo "Creating AI summary..."
           echo "## AI Notes" > ai.md
-          echo "- Scan completed" >> ai.md
-
-          echo "::endgroup::"
+          echo "- Scan completed successfully" >> ai.md
 
       - uses: actions/upload-artifact@v4
         with:
@@ -191,7 +206,7 @@ jobs:
 
 
 # =========================================================
-# STAGE 5: SECURITY GATE
+# STAGE 5: SECURITY GATE (JSON BASED FINAL CHECK)
 # =========================================================
   security-gate:
     name: Security Gate
@@ -206,8 +221,6 @@ jobs:
 
       - name: Evaluate
         run: |
-          echo "::group::Security Gate"
-
           CRITICAL=$(jq '[.Results[].Vulnerabilities[]? | select(.Severity=="CRITICAL")] | length' trivy.json)
           HIGH=$(jq '[.Results[].Vulnerabilities[]? | select(.Severity=="HIGH")] | length' trivy.json)
 
@@ -218,8 +231,6 @@ jobs:
             echo "BLOCKED"
             exit 1
           fi
-
-          echo "::endgroup::"
 
 
 # =========================================================
@@ -233,7 +244,5 @@ jobs:
     steps:
       - name: Deploy
         run: |
-          echo "::group::Deploy Stage"
           echo "Deploying image v1.0.${{ github.run_number }}"
           echo "Application LIVE"
-          echo "::endgroup::"
