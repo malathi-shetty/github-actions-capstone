@@ -19,9 +19,13 @@ permissions:
 #     ↓
 # docker
 #     ↓
-# trivy-scan (JSON + SARIF)
+# trivy-scan
+#     ├── trivy-json        → automation + security gate
+#     ├── trivy-sarif       → GitHub Security tab
 #     ↓
 # generate-reports
+#     ├── trivy.md         → human report
+#     ├── ai.md            → AI summary
 #     ↓
 # security-gate
 #     ↓
@@ -32,18 +36,11 @@ permissions:
 jobs:
 
 # =========================================================
-# 1. BUILD + TEST STAGE
+# 1. BUILD + TEST
 # =========================================================
-# PURPOSE:
-# - Validates application code
-# - Runs unit tests
-# - Ensures only clean code proceeds further
-#
-# OUTPUT:
-# - Verified build artifacts
-#
-# NEXT STEP:
-# - Sends successful build to Docker stage
+# INPUT: Source code
+# OUTPUT: Verified build
+# NEXT: Docker build
 # =========================================================
 
   build-test:
@@ -57,21 +54,11 @@ jobs:
 
 
 # =========================================================
-# 2. DOCKER BUILD + PUSH STAGE
+# 2. DOCKER BUILD + PUSH
 # =========================================================
-# PURPOSE:
-# - Builds Docker image from validated code
-# - Pushes image to Docker registry
-#
-# INPUT:
-# - Successful build-test job
-#
-# OUTPUT:
-# - Docker image:
-#   shettymalathi113/github-actions-capstone:v1.0.X
-#
-# NEXT STEP:
-# - Sends image to security scanning (Trivy)
+# INPUT: Valid build
+# OUTPUT: Docker image
+# NEXT: Security scan (Trivy)
 # =========================================================
 
   docker:
@@ -93,23 +80,13 @@ jobs:
 
 
 # =========================================================
-# 3. SECURITY SCAN STAGE (TRIVY)
+# 3. SECURITY SCAN (TRIVY)
 # =========================================================
-# PURPOSE:
-# - Scans Docker image for vulnerabilities (CVE detection)
-# - Produces 2 outputs:
-#     1. JSON → for automation + reports
-#     2. SARIF → for GitHub Security UI
-#
-# INPUT:
-# - Docker image from docker job
-#
+# INPUT: Docker image
 # OUTPUT:
-# - trivy.json (machine-readable)
-# - trivy-results.sarif (GitHub Security tab)
-#
-# NEXT STEP:
-# - Sends results to report generation stage
+#   - trivy.json   (for automation & gate)
+#   - trivy.sarif  (for GitHub Security UI)
+# NEXT: Reporting stage
 # =========================================================
 
   trivy-scan:
@@ -121,7 +98,6 @@ jobs:
     permissions:
       contents: read
       security-events: write
-
 
     steps:
 
@@ -147,7 +123,7 @@ jobs:
 
 
       # -----------------------------
-      # JSON SCAN (Automation + Gate)
+      # JSON SCAN (for automation + gate)
       # -----------------------------
       - name: Run Trivy JSON Scan
         run: |
@@ -160,7 +136,7 @@ jobs:
 
 
       # -----------------------------
-      # SARIF SCAN (GitHub Security UI)
+      # SARIF SCAN (for GitHub Security tab)
       # -----------------------------
       - name: Run Trivy SARIF Scan
         run: |
@@ -168,47 +144,45 @@ jobs:
             --severity HIGH,CRITICAL \
             --ignore-unfixed \
             --format sarif \
-            --output trivy-results.sarif \
+            --output trivy.sarif \
             shettymalathi113/github-actions-capstone:v1.0.${{ github.run_number }}
+
+          ls -l trivy.sarif
 
 
       # -----------------------------
-      # Upload SARIF to GitHub Security Tab
+      # Upload SARIF → GitHub Security Tab
       # -----------------------------
       - name: Upload SARIF to Security Tab
         uses: github/codeql-action/upload-sarif@v3
         with:
-          sarif_file: trivy-results.sarif
+          sarif_file: trivy.sarif
 
 
       # -----------------------------
-      # Upload Artifacts for next stage
+      # Upload structured artifacts (IMPORTANT)
       # -----------------------------
-      - name: Upload Reports
+      - name: Upload Trivy JSON Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: trivy-reports
-          path: |
-            trivy.json
-            trivy-results.sarif
+          name: trivy-json
+          path: trivy.json
+
+      - name: Upload Trivy SARIF Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-sarif
+          path: trivy.sarif
 
 
 # =========================================================
-# 4. REPORT GENERATION STAGE
+# 4. REPORT GENERATION
 # =========================================================
-# PURPOSE:
-# - Converts raw scan data into readable reports
-# - Generates markdown + AI summary
-#
-# INPUT:
-# - trivy.json + trivy-results.sarif
-#
+# INPUT: trivy.json
 # OUTPUT:
-# - trivy.md (vulnerability table)
-# - ai.md (summary notes)
-#
-# NEXT STEP:
-# - Sends reports to security gate
+#   - trivy.md
+#   - ai.md
+# NEXT: Security gate
 # =========================================================
 
   generate-reports:
@@ -219,10 +193,10 @@ jobs:
 
     steps:
 
-      - name: Download Reports
+      - name: Download JSON Artifact
         uses: actions/download-artifact@v4
         with:
-          name: trivy-reports
+          name: trivy-json
 
       - name: Generate Markdown Report
         run: |
@@ -239,35 +213,24 @@ jobs:
         run: |
           echo "## AI Notes" > ai.md
           echo "- Trivy scan completed" >> ai.md
-          echo "- SARIF uploaded to GitHub Security tab" >> ai.md
+          echo "- JSON + SARIF generated separately" >> ai.md
 
-      - name: Upload Reports
+      - name: Upload Reports Artifact
         uses: actions/upload-artifact@v4
         with:
           name: reports
           path: |
             trivy.md
             ai.md
-            trivy.json
-            trivy-results.sarif
 
 
 # =========================================================
-# 5. SECURITY GATE (HARD BLOCK)
+# 5. SECURITY GATE
 # =========================================================
-# PURPOSE:
-# - Enforces DevSecOps policy
-# - Blocks deployment if HIGH/CRITICAL CVEs exist
-#
-# INPUT:
-# - trivy.json
-#
+# INPUT: trivy.json
 # OUTPUT:
-# - PASS → deployment allowed
-# - FAIL → pipeline stops
-#
-# NEXT STEP:
-# - If PASS → deploy stage runs
+#   PASS → deploy
+#   FAIL → stop pipeline
 # =========================================================
 
   security-gate:
@@ -278,12 +241,12 @@ jobs:
 
     steps:
 
-      - name: Download Reports
+      - name: Download JSON Artifact
         uses: actions/download-artifact@v4
         with:
-          name: reports
+          name: trivy-json
 
-      - name: Fail Build If Vulnerabilities Found
+      - name: Fail if HIGH/CRITICAL found
         run: |
           CRITICAL=$(jq '[.Results[].Vulnerabilities[]? | select(.Severity=="CRITICAL")] | length' trivy.json)
           HIGH=$(jq '[.Results[].Vulnerabilities[]? | select(.Severity=="HIGH")] | length' trivy.json)
@@ -298,16 +261,10 @@ jobs:
 
 
 # =========================================================
-# 6. DEPLOYMENT STAGE
+# 6. DEPLOYMENT
 # =========================================================
-# PURPOSE:
-# - Deploys application ONLY if security gate passes
-#
-# INPUT:
-# - Clean security scan (no HIGH/CRITICAL CVEs)
-#
-# OUTPUT:
-# - Application deployed successfully
+# INPUT: Passed security gate
+# OUTPUT: App deployed
 # =========================================================
 
   deploy:
