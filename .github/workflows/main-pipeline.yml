@@ -77,7 +77,7 @@ jobs:
           key: trivy-db-${{ runner.os }}
 
       # =====================================================
-      # JSON SCAN (SINGLE SOURCE OF TRUTH)
+      # JSON SCAN (SOURCE OF TRUTH)
       # =====================================================
       - name: Run JSON Scan
         run: |
@@ -112,7 +112,7 @@ jobs:
 
 
 # =========================================================
-# 4. REPORT GENERATION (RESTORED FULL VERSION)
+# 4. REPORT GENERATION (FULL RESTORED)
 # =========================================================
   generate-reports:
     name: Generate Reports
@@ -126,12 +126,13 @@ jobs:
           name: trivy-json
 
       # =====================================================
-      # FULL TABLE REPORT (RESTORED)
+      # FULL TABLE REPORT (FIXED)
       # =====================================================
       - name: Generate Trivy Markdown Report
         run: |
           echo "## 🔐 Vulnerability Report (Trivy)" > trivy.md
           echo "" >> trivy.md
+
           echo "| Severity | Package | Vulnerability | Installed Version | Fixed Version |" >> trivy.md
           echo "|----------|---------|---------------|-------------------|---------------|" >> trivy.md
 
@@ -141,17 +142,17 @@ jobs:
           ' trivy.json >> trivy.md
 
       # =====================================================
-      # AI NOTES (RESTORED)
+      # AI NOTES
       # =====================================================
       - name: Generate AI Notes
         run: |
-          echo "## 🤖 AI Release Notes" > ai.md
+          echo "## 🤖 AI Notes" > ai.md
           echo "- Build completed" >> ai.md
           echo "- Docker image built" >> ai.md
           echo "- Trivy scan executed" >> ai.md
 
       # =====================================================
-      # SUMMARY (TABLE STYLE RESTORED)
+      # STEP SUMMARY (FIXED + TABLE INCLUDED)
       # =====================================================
       - name: Publish Summary
         run: |
@@ -169,7 +170,7 @@ jobs:
 
 
 # =========================================================
-# 5. SECURITY DASHBOARD (FULL RESTORED + YOUR FORMAT)
+# 5. SECURITY DASHBOARD (FIXED + CLEAN HTML)
 # =========================================================
   security-dashboard:
     name: Security Dashboard
@@ -196,7 +197,7 @@ jobs:
           echo "SCORE=$SCORE" >> $GITHUB_ENV
 
       # =====================================================
-      # FULL DASHBOARD (YOUR ORIGINAL FORMAT RESTORED)
+      # DASHBOARD SUMMARY (RESTORED ORIGINAL FORMAT)
       # =====================================================
       - name: Security Dashboard Summary
         run: |
@@ -229,18 +230,39 @@ jobs:
           fi
 
       # =====================================================
-      # HTML DASHBOARD
+      # FIXED HTML DASHBOARD (READABLE NOW)
       # =====================================================
       - name: Generate HTML Dashboard
         run: |
-          echo "<html><body>" > security-dashboard.html
-          echo "<h1>Trivy Security Dashboard</h1>" >> security-dashboard.html
-          echo "<h2>Score: $SCORE / 100</h2>" >> security-dashboard.html
+          cat <<EOF > security-dashboard.html
+          <html>
+          <head>
+            <title>Trivy Security Dashboard</title>
+            <style>
+              body { font-family: Arial; margin: 20px; }
+              pre { background: #f4f4f4; padding: 10px; }
+              table { border-collapse: collapse; width: 100%; }
+              th, td { border: 1px solid #ddd; padding: 8px; }
+            </style>
+          </head>
+          <body>
 
-          jq '.Results[].Vulnerabilities[]? | select(.Severity=="CRITICAL")' trivy.json >> security-dashboard.html
-          jq '.Results[].Vulnerabilities[]? | select(.Severity=="HIGH")' trivy.json >> security-dashboard.html
+          <h1>🛡 Security Dashboard</h1>
+          <h2>Score: $SCORE / 100</h2>
 
-          echo "</body></html>" >> security-dashboard.html
+          <h3>Critical Vulnerabilities</h3>
+          <pre>
+$(jq '.Results[].Vulnerabilities[]? | select(.Severity=="CRITICAL")' trivy.json)
+          </pre>
+
+          <h3>High Vulnerabilities</h3>
+          <pre>
+$(jq '.Results[].Vulnerabilities[]? | select(.Severity=="HIGH")' trivy.json)
+          </pre>
+
+          </body>
+          </html>
+          EOF
 
       - uses: actions/upload-artifact@v4
         with:
