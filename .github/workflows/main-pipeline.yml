@@ -120,7 +120,7 @@ jobs:
       # CHECKOUT (PINNED SHA)
       # =====================================================
       - name: Checkout code
-        uses: actions/checkout@c2d88d3ecc89a9ef08eebf45d9637801dcee7eb5
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
       # =====================================================
       # INSTALL TOOLS
