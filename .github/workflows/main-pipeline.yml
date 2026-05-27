@@ -234,36 +234,36 @@ jobs:
       # =====================================================
       - name: Generate HTML Dashboard
         run: |
-          cat <<EOF > security-dashboard.html
-          <html>
-          <head>
-            <title>Trivy Security Dashboard</title>
-            <style>
-              body { font-family: Arial; margin: 20px; }
-              pre { background: #f4f4f4; padding: 10px; }
-              table { border-collapse: collapse; width: 100%; }
-              th, td { border: 1px solid #ddd; padding: 8px; }
-            </style>
-          </head>
-          <body>
+          CRITICAL_JSON=$(jq -c '[.Results[].Vulnerabilities[]? | select(.Severity=="CRITICAL")]' trivy.json)
+          HIGH_JSON=$(jq -c '[.Results[].Vulnerabilities[]? | select(.Severity=="HIGH")]' trivy.json)
 
-          <h1>🛡 Security Dashboard</h1>
-          <h2>Score: $SCORE / 100</h2>
+          echo "<html>" > security-dashboard.html
+          echo "<head>" >> security-dashboard.html
+          echo "<title>Trivy Security Dashboard</title>" >> security-dashboard.html
+          echo "<style>" >> security-dashboard.html
+          echo "body { font-family: Arial; margin: 20px; }" >> security-dashboard.html
+          echo "pre { background: #f4f4f4; padding: 10px; overflow-x: auto; }" >> security-dashboard.html
+          echo "h1, h2, h3 { color: #333; }" >> security-dashboard.html
+          echo "</style>" >> security-dashboard.html
+          echo "</head>" >> security-dashboard.html
 
-          <h3>Critical Vulnerabilities</h3>
-          <pre>
-$(jq '.Results[].Vulnerabilities[]? | select(.Severity=="CRITICAL")' trivy.json)
-          </pre>
+          echo "<body>" >> security-dashboard.html
+          echo "<h1>🛡 Security Dashboard</h1>" >> security-dashboard.html
+          echo "<h2>Score: $SCORE / 100</h2>" >> security-dashboard.html
 
-          <h3>High Vulnerabilities</h3>
-          <pre>
-$(jq '.Results[].Vulnerabilities[]? | select(.Severity=="HIGH")' trivy.json)
-          </pre>
+          echo "<h3>Critical Vulnerabilities</h3>" >> security-dashboard.html
+          echo "<pre>" >> security-dashboard.html
+          echo "$CRITICAL_JSON" >> security-dashboard.html
+          echo "</pre>" >> security-dashboard.html
 
-          </body>
-          </html>
-          EOF
+          echo "<h3>High Vulnerabilities</h3>" >> security-dashboard.html
+          echo "<pre>" >> security-dashboard.html
+          echo "$HIGH_JSON" >> security-dashboard.html
+          echo "</pre>" >> security-dashboard.html
 
+          echo "</body>" >> security-dashboard.html
+          echo "</html>" >> security-dashboard.html
+          
       - uses: actions/upload-artifact@v4
         with:
           name: security-dashboard
