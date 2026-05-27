@@ -188,10 +188,19 @@ jobs:
       - name: Security Dashboard Summary
         run: |
           echo "## 🔐 Security Dashboard Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
 
           echo "### 📦 JSON Scan Summary" >> $GITHUB_STEP_SUMMARY
           echo "- Critical: $CRITICAL" >> $GITHUB_STEP_SUMMARY
           echo "- High: $HIGH" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          echo "📦 Top Vulnerable Packages" >> $GITHUB_STEP_SUMMARY
+          jq -r '.Results[].Vulnerabilities[]? | .PkgName' trivy.json \
+          | sort | uniq -c | sort -nr | head -10 \
+          | while read count pkg; do
+              echo "- $pkg → $count issues" >> $GITHUB_STEP_SUMMARY
+            done
 
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 🐳 Image Info" >> $GITHUB_STEP_SUMMARY
