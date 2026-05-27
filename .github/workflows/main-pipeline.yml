@@ -130,12 +130,13 @@ jobs:
 
 
 # =========================================================
-# 4. SECURITY DASHBOARD (PARALLEL VISUAL ENGINE)
+# 4. SECURITY DASHBOARD (PARALLEL OBSERVABILITY LAYER)
 # =========================================================
   security-dashboard:
     name: Security Dashboard
     needs: trivy-scan
     runs-on: ubuntu-latest
+    continue-on-error: true
 
     steps:
 
@@ -143,7 +144,7 @@ jobs:
         with:
           name: trivy-json
 
-      # ---------------- SCORE ----------------
+      # ---------------- SECURITY SCORE ----------------
       - name: Security Score
         run: |
           CRITICAL=$(jq '[.Results[].Vulnerabilities[]? | select(.Severity=="CRITICAL")] | length' trivy.json)
@@ -159,36 +160,37 @@ jobs:
       - name: CVE Grouping
         run: |
           echo "CRITICAL CVEs:"
-          jq -r '.Results[].Vulnerabilities[]? | select(.Severity=="CRITICAL") | .VulnerabilityID' trivy.json | sort | uniq
+          jq -r '.Results[].Vulnerabilities[]? | select(.Severity=="CRITICAL") | .VulnerabilityID' trivy.json | sort -u
 
           echo "HIGH CVEs:"
-          jq -r '.Results[].Vulnerabilities[]? | select(.Severity=="HIGH") | .VulnerabilityID' trivy.json | sort | uniq
+          jq -r '.Results[].Vulnerabilities[]? | select(.Severity=="HIGH") | .VulnerabilityID' trivy.json | sort -u
 
-      # ---------------- DOCKER LAYERS ----------------
+      # ---------------- DOCKER LAYER BREAKDOWN ----------------
       - name: Docker Layer Breakdown
         run: |
-          echo "Layer-wise issues"
           jq -r '.Results[].Vulnerabilities[]? |
-            .PkgName + " in " + (.PkgPath // "base image")' trivy.json | head -20
+            .PkgName + " → " + (.PkgPath // "base-image")' trivy.json | head -20
 
-      # ---------------- HTML REPORT ----------------
-      - name: Generate HTML Dashboard
+      # ---------------- HTML DASHBOARD ----------------
+      - name: Generate HTML Report
         run: |
           cat <<EOF > security-dashboard.html
           <html>
           <head><title>Security Dashboard</title></head>
           <body>
           <h1>Trivy Security Dashboard</h1>
-          <h2>Score: $SCORE / 100</h2>
-          <h3>Critical Issues</h3>
+          <h2>Security Score: $SCORE / 100</h2>
+
+          <h3>Critical Vulnerabilities</h3>
           <pre>$(jq '.Results[].Vulnerabilities[]? | select(.Severity=="CRITICAL")' trivy.json)</pre>
-          <h3>High Issues</h3>
+
+          <h3>High Vulnerabilities</h3>
           <pre>$(jq '.Results[].Vulnerabilities[]? | select(.Severity=="HIGH")' trivy.json)</pre>
           </body>
           </html>
           EOF
 
-      # ---------------- UPLOAD HTML ----------------
+      # ---------------- UPLOAD DASHBOARD ----------------
       - uses: actions/upload-artifact@v4
         with:
           name: security-dashboard
@@ -196,7 +198,7 @@ jobs:
 
 
 # =========================================================
-# 5. SECURITY GATE (FAIL PIPELINE)
+# 5. SECURITY GATE (FAIL PIPELINE ONLY)
 # =========================================================
   security-gate:
     name: Security Gate
@@ -209,19 +211,22 @@ jobs:
         with:
           name: trivy-json
 
-      - name: Fail Gate
+      - name: Evaluate Security Gate
         run: |
           CRITICAL=$(jq '[.Results[].Vulnerabilities[]? | select(.Severity=="CRITICAL")] | length' trivy.json)
           HIGH=$(jq '[.Results[].Vulnerabilities[]? | select(.Severity=="HIGH")] | length' trivy.json)
 
+          echo "CRITICAL=$CRITICAL"
+          echo "HIGH=$HIGH"
+
           if [ "$CRITICAL" -gt 0 ] || [ "$HIGH" -gt 0 ]; then
-            echo "BLOCKED"
+            echo "❌ BLOCKED: Security issues found"
             exit 1
           fi
 
 
 # =========================================================
-# 6. DEPLOY
+# 6. DEPLOY (ONLY IF CLEAN)
 # =========================================================
   deploy:
     name: Deploy
@@ -229,7 +234,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Deploy
+      - name: Deploy App
         run: |
-          echo "Deploying v1.0.${{ github.run_number }}"
-          echo "Application LIVE 🚀"
+          echo "🚀 Deploying v1.0.${{ github.run_number }}"
+          echo "Application LIVE"
