@@ -16,20 +16,31 @@ permissions:
 # PIPELINE FLOW (VISUAL)
 # =========================================================
 # build-test
-#     ↓
+#   INPUT: source code
+#   OUTPUT: build artifacts
+#   ↓
 # docker
-#     ↓
+#   INPUT: build artifacts
+#   OUTPUT: docker image
+#   ↓
 # trivy-scan
-#     ├── trivy-json        → automation + security gate
-#     ├── trivy-sarif       → GitHub Security tab
-#     ↓
+#   INPUT: docker image
+#   OUTPUT:
+#       - trivy-json (automation + gate)
+#       - trivy-sarif (GitHub Security UI)
+#   ↓
 # generate-reports
-#     ├── trivy.md         → human report
-#     ├── ai.md            → AI summary
-#     ↓
+#   INPUT: trivy-json
+#   OUTPUT:
+#       - trivy.md
+#       - ai.md
+#   ↓
 # security-gate
-#     ↓
+#   INPUT: trivy-json
+#   OUTPUT: PASS / FAIL decision
+#   ↓
 # deploy
+#   INPUT: approved image
 # =========================================================
 
 
@@ -39,8 +50,8 @@ jobs:
 # 1. BUILD + TEST
 # =========================================================
 # INPUT: Source code
-# OUTPUT: Verified build
-# NEXT: Docker build
+# OUTPUT: validated build
+# NEXT: docker
 # =========================================================
 
   build-test:
@@ -54,11 +65,11 @@ jobs:
 
 
 # =========================================================
-# 2. DOCKER BUILD + PUSH
+# 2. DOCKER BUILD
 # =========================================================
-# INPUT: Valid build
-# OUTPUT: Docker image
-# NEXT: Security scan (Trivy)
+# INPUT: build-test output
+# OUTPUT: docker image
+# NEXT: trivy-scan
 # =========================================================
 
   docker:
@@ -80,13 +91,13 @@ jobs:
 
 
 # =========================================================
-# 3. SECURITY SCAN (TRIVY)
+# 3. TRIVY SECURITY SCAN
 # =========================================================
-# INPUT: Docker image
+# INPUT: docker image
 # OUTPUT:
-#   - trivy.json   (for automation & gate)
-#   - trivy.sarif  (for GitHub Security UI)
-# NEXT: Reporting stage
+#   - trivy-json  → automation + security gate
+#   - trivy-sarif → GitHub Security tab
+# NEXT: generate-reports
 # =========================================================
 
   trivy-scan:
@@ -101,9 +112,6 @@ jobs:
 
     steps:
 
-      # -----------------------------
-      # Install Trivy
-      # -----------------------------
       - name: Install Trivy
         run: |
           sudo apt-get update
@@ -118,14 +126,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y trivy
 
-      - name: Verify Trivy
-        run: trivy --version
-
-
-      # -----------------------------
-      # JSON SCAN (for automation + gate)
-      # -----------------------------
-      - name: Run Trivy JSON Scan
+      - name: Run JSON Scan (Automation Artifact)
         run: |
           trivy image \
             --severity HIGH,CRITICAL \
@@ -134,11 +135,7 @@ jobs:
             --output trivy.json \
             shettymalathi113/github-actions-capstone:v1.0.${{ github.run_number }}
 
-
-      # -----------------------------
-      # SARIF SCAN (for GitHub Security tab)
-      # -----------------------------
-      - name: Run Trivy SARIF Scan
+      - name: Run SARIF Scan (GitHub Security UI)
         run: |
           trivy image \
             --severity HIGH,CRITICAL \
@@ -147,42 +144,32 @@ jobs:
             --output trivy.sarif \
             shettymalathi113/github-actions-capstone:v1.0.${{ github.run_number }}
 
-          ls -l trivy.sarif
-
-
-      # -----------------------------
-      # Upload SARIF → GitHub Security Tab
-      # -----------------------------
-      - name: Upload SARIF to Security Tab
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: trivy.sarif
-
-
-      # -----------------------------
-      # Upload structured artifacts (IMPORTANT)
-      # -----------------------------
-      - name: Upload Trivy JSON Artifact
+      - name: Upload JSON Artifact
         uses: actions/upload-artifact@v4
         with:
           name: trivy-json
           path: trivy.json
 
-      - name: Upload Trivy SARIF Artifact
+      - name: Upload SARIF Artifact
         uses: actions/upload-artifact@v4
         with:
           name: trivy-sarif
           path: trivy.sarif
 
+      - name: Upload SARIF to GitHub Security Tab
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy.sarif
+
 
 # =========================================================
 # 4. REPORT GENERATION
 # =========================================================
-# INPUT: trivy.json
+# INPUT: trivy-json
 # OUTPUT:
 #   - trivy.md
 #   - ai.md
-# NEXT: Security gate
+# NEXT: security-gate
 # =========================================================
 
   generate-reports:
@@ -200,7 +187,7 @@ jobs:
 
       - name: Generate Markdown Report
         run: |
-          echo "## 🔐 Trivy Vulnerability Report" > trivy.md
+          echo "## 🔐 Trivy Report" > trivy.md
           echo "| Severity | Package | Vulnerability | Installed | Fixed |" >> trivy.md
           echo "|---|---|---|---|---|" >> trivy.md
 
@@ -213,7 +200,7 @@ jobs:
         run: |
           echo "## AI Notes" > ai.md
           echo "- Trivy scan completed" >> ai.md
-          echo "- JSON + SARIF generated separately" >> ai.md
+          echo "- SARIF uploaded to Security tab" >> ai.md
 
       - name: Upload Reports Artifact
         uses: actions/upload-artifact@v4
@@ -225,9 +212,9 @@ jobs:
 
 
 # =========================================================
-# 5. SECURITY GATE
+# 5. SECURITY GATE (HARD STOP)
 # =========================================================
-# INPUT: trivy.json
+# INPUT: trivy-json
 # OUTPUT:
 #   PASS → deploy
 #   FAIL → stop pipeline
@@ -246,7 +233,7 @@ jobs:
         with:
           name: trivy-json
 
-      - name: Fail if HIGH/CRITICAL found
+      - name: Block HIGH/CRITICAL CVEs
         run: |
           CRITICAL=$(jq '[.Results[].Vulnerabilities[]? | select(.Severity=="CRITICAL")] | length' trivy.json)
           HIGH=$(jq '[.Results[].Vulnerabilities[]? | select(.Severity=="HIGH")] | length' trivy.json)
@@ -255,16 +242,16 @@ jobs:
           echo "HIGH=$HIGH"
 
           if [ "$CRITICAL" -gt 0 ] || [ "$HIGH" -gt 0 ]; then
-            echo "HIGH or CRITICAL vulnerabilities found"
+            echo "BLOCKED: vulnerabilities found"
             exit 1
           fi
 
 
 # =========================================================
-# 6. DEPLOYMENT
+# 6. DEPLOY
 # =========================================================
-# INPUT: Passed security gate
-# OUTPUT: App deployed
+# INPUT: security-approved image
+# OUTPUT: deployed app
 # =========================================================
 
   deploy:
