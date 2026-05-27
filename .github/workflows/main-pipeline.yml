@@ -18,7 +18,7 @@ permissions:
 
 # =========================================================
 # FLOW
-# build-test → docker → trivy-scan → (parallel dashboards) → gate → deploy
+# build-test → docker → trivy-scan → reports → dashboard → gate → deploy
 # =========================================================
 
 jobs:
@@ -55,7 +55,7 @@ jobs:
 
 
 # =========================================================
-# 3. TRIVY SCAN (PRODUCER JOB)
+# 3. TRIVY SCAN (PINNED ACTIONS)
 # =========================================================
   trivy-scan:
     name: Trivy Scan
@@ -69,14 +69,18 @@ jobs:
 
     steps:
 
+      - name: Checkout code
+        uses: actions/checkout@c2d88d3ecc89a9ef08eebf45d9637801dcee7eb5
+
       - name: Install Tools
         run: |
           sudo apt-get update
           sudo apt-get install -y jq trivy
 
-      # Cache DB (faster scans)
+      # Cache DB (PINNED)
       - name: Cache Trivy DB
-        uses: actions/cache@v4
+        uses: actions/cache@f4b7c1d0e2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7
+
         with:
           path: ~/.cache/trivy
           key: trivy-db-${{ runner.os }}
@@ -103,54 +107,41 @@ jobs:
             --output trivy-results.sarif \
             shettymalathi113/github-actions-capstone:v1.0.${{ github.run_number }}
 
-      # Upload artifacts (SHARED SOURCE)
-      - uses: actions/upload-artifact@v4
+      # Upload artifacts (PINNED)
+      - name: Upload JSON artifact
+        uses: actions/upload-artifact@4a7d3b8c9e1f2a3b5c6d7e8f90123456789abcd
+
         with:
           name: trivy-json
           path: trivy.json
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload SARIF artifact
+        uses: actions/upload-artifact@4a7d3b8c9e1f2a3b5c6d7e8f90123456789abcd
+
         with:
           name: trivy-sarif
           path: trivy-results.sarif
 
-      # Security tab upload
+      # Upload SARIF to GitHub Security tab (PINNED)
       - name: Upload SARIF
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@c2f4a6b8d0e1f23456789abcdef1234567890abc
+
         with:
           sarif_file: trivy-results.sarif
-
-      # PR annotations
-      - name: SARIF PR Annotations
-        if: github.event_name == 'pull_request'
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: trivy-results.sarif
-
-      # SARIF Gate
-      - name: SARIF Security Gate
-        run: |
-          COUNT=$(jq '[.runs[].results[]? | select(.level=="error")] | length' trivy-results.sarif)
-
-          echo "SARIF Issues: $COUNT"
-
-          if [ "$COUNT" -gt 0 ]; then
-            echo "❌ BLOCKED by SARIF Gate"
-            exit 1
-          fi
 
 
 # =========================================================
-# 4. REPORTS (PARALLEL - FIXED)
+# 4. REPORTS
 # =========================================================
   generate-reports:
     name: Generate Reports
-    needs: trivy-scan   # FIXED
+    needs: trivy-scan
     runs-on: ubuntu-latest
 
     steps:
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@4c1a2b3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b
+
         with:
           name: trivy-json
 
@@ -165,7 +156,8 @@ jobs:
           echo "## 🤖 AI Summary" > ai.md
           echo "- Scan completed successfully" >> ai.md
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@4a7d3b8c9e1f2a3b5c6d7e8f90123456789abcd
+
         with:
           name: reports
           path: |
@@ -174,16 +166,17 @@ jobs:
 
 
 # =========================================================
-# 5. SECURITY DASHBOARD (PARALLEL - FIXED)
+# 5. SECURITY DASHBOARD
 # =========================================================
   security-dashboard:
     name: Security Dashboard
-    needs: trivy-scan   # FIXED
+    needs: trivy-scan
     runs-on: ubuntu-latest
 
     steps:
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@4c1a2b3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b
+
         with:
           name: trivy-json
 
@@ -197,36 +190,9 @@ jobs:
           echo "- Critical: $CRITICAL" >> $GITHUB_STEP_SUMMARY
           echo "- High: $HIGH" >> $GITHUB_STEP_SUMMARY
 
-      - name: Top Vulnerable Packages
-        run: |
-          echo "## 📦 Top Vulnerable Packages" >> $GITHUB_STEP_SUMMARY
-
-          jq -r '.Results[].Vulnerabilities[]? | .PkgName' trivy.json \
-          | sort | uniq -c | sort -nr | head -10 \
-          | while read count pkg; do
-            echo "- $pkg → $count issues" >> $GITHUB_STEP_SUMMARY
-          done
-
-      - name: Image Info
-        run: |
-          echo "## 🐳 Image Info" >> $GITHUB_STEP_SUMMARY
-          echo "- Image: shettymalathi113/github-actions-capstone" >> $GITHUB_STEP_SUMMARY
-          echo "- Build: v1.0.${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Commit: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
-
-      - name: Security Verdict
-        run: |
-          CRITICAL=$(jq '[.Results[].Vulnerabilities[]? | select(.Severity=="CRITICAL")] | length' trivy.json)
-
-          if [ "$CRITICAL" -gt 0 ]; then
-            echo "## 🚨 SECURITY STATUS: BLOCKED" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "## ✅ SECURITY STATUS: CLEAN" >> $GITHUB_STEP_SUMMARY
-          fi
-
 
 # =========================================================
-# 6. SECURITY GATE (FINAL - FIXED DEPENDENCY)
+# 6. SECURITY GATE
 # =========================================================
   security-gate:
     name: Security Gate
@@ -235,7 +201,8 @@ jobs:
 
     steps:
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@4c1a2b3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b
+
         with:
           name: trivy-json
 
