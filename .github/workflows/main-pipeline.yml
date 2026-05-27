@@ -18,7 +18,7 @@ permissions:
 
 # =========================================================
 # STAGES FLOW
-# build-test → docker → trivy → reports → security-gate → deploy
+# build-test → docker → trivy → reports → security-gate → dashboard → deploy
 # =========================================================
 
 jobs:
@@ -55,7 +55,7 @@ jobs:
 
 
 # =========================================================
-# 3. TRIVY SCAN (FULLY AUTOMATED SECURITY LAYER)
+# 3. TRIVY SCAN (SECURITY LAYER)
 # =========================================================
   trivy-scan:
     name: Trivy Scan
@@ -70,15 +70,15 @@ jobs:
     steps:
 
       # ---------------------------
-      # Install Trivy
+      # Install tools
       # ---------------------------
-      - name: Install Trivy
+      - name: Install Trivy + jq
         run: |
           sudo apt-get update
           sudo apt-get install -y jq trivy
 
       # ---------------------------
-      # CACHE TRIVY DB (FASTER SCANS)
+      # Cache Trivy DB (FAST SCANS)
       # ---------------------------
       - name: Cache Trivy DB
         uses: actions/cache@v4
@@ -113,7 +113,7 @@ jobs:
             shettymalathi113/github-actions-capstone:v1.0.${{ github.run_number }}
 
       # ---------------------------
-      # UPLOAD ARTIFACTS
+      # Upload artifacts
       # ---------------------------
       - uses: actions/upload-artifact@v4
         with:
@@ -126,15 +126,15 @@ jobs:
           path: trivy-results.sarif
 
       # ---------------------------
-      # SARIF → GITHUB SECURITY TAB
+      # SARIF → GitHub Security Tab
       # ---------------------------
-      - name: Upload SARIF to Security Tab
+      - name: Upload SARIF
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: trivy-results.sarif
 
       # ---------------------------
-      # PR ANNOTATIONS (INLINE COMMENTS)
+      # PR ANNOTATIONS
       # ---------------------------
       - name: SARIF PR Annotations
         if: github.event_name == 'pull_request'
@@ -143,7 +143,7 @@ jobs:
           sarif_file: trivy-results.sarif
 
       # ---------------------------
-      # SARIF SECURITY GATE
+      # SARIF SECURITY GATE (FAIL FAST)
       # ---------------------------
       - name: SARIF Security Gate
         run: |
@@ -152,29 +152,9 @@ jobs:
           echo "SARIF Issues: $COUNT"
 
           if [ "$COUNT" -gt 0 ]; then
-            echo "❌ BLOCKED by SARIF Security Gate"
+            echo "❌ BLOCKED by SARIF Gate"
             exit 1
           fi
-
-      # ---------------------------
-      # 🔐 SARIF SUMMARY (JOB SUMMARY UI)
-      # ---------------------------
-      - name: SARIF Summary
-        run: |
-          echo "## 🔐 SARIF Security Summary" >> $GITHUB_STEP_SUMMARY
-
-          TOTAL=$(jq '[.runs[].results[]?] | length' trivy-results.sarif)
-          ERRORS=$(jq '[.runs[].results[]? | select(.level=="error")] | length' trivy-results.sarif)
-
-          echo "- Total Issues: $TOTAL" >> $GITHUB_STEP_SUMMARY
-          echo "- High/Critical: $ERRORS" >> $GITHUB_STEP_SUMMARY
-
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Top Findings" >> $GITHUB_STEP_SUMMARY
-
-          jq -r '.runs[].results[]? |
-            "- ❗ " + (.ruleId // "unknown") + " → " + (.locations[0].physicalLocation.artifactLocation.uri // "unknown")' \
-            trivy-results.sarif | head -10 >> $GITHUB_STEP_SUMMARY
 
 
 # =========================================================
@@ -211,7 +191,7 @@ jobs:
 
 
 # =========================================================
-# 5. SECURITY GATE (JSON FINAL CHECK)
+# 5. SECURITY GATE (FINAL JSON CHECK)
 # =========================================================
   security-gate:
     name: Security Gate
@@ -239,7 +219,71 @@ jobs:
 
 
 # =========================================================
-# 6. DEPLOY
+# 6. SECURITY DASHBOARD (ENTERPRISE REPORT)
+# =========================================================
+  security-dashboard:
+    name: Security Dashboard
+    needs: trivy-scan
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: trivy-json
+
+      # =====================================================
+      # 📦 A. JSON Scan Summary
+      # =====================================================
+      - name: JSON Scan Summary
+        run: |
+          echo "## 📦 JSON Scan Summary" >> $GITHUB_STEP_SUMMARY
+
+          CRITICAL=$(jq '[.Results[].Vulnerabilities[]? | select(.Severity=="CRITICAL")] | length' trivy.json)
+          HIGH=$(jq '[.Results[].Vulnerabilities[]? | select(.Severity=="HIGH")] | length' trivy.json)
+
+          echo "- Critical: $CRITICAL" >> $GITHUB_STEP_SUMMARY
+          echo "- High: $HIGH" >> $GITHUB_STEP_SUMMARY
+
+      # =====================================================
+      # 📦 B. Top Vulnerable Packages
+      # =====================================================
+      - name: Top Vulnerable Packages
+        run: |
+          echo "## 📦 Top Vulnerable Packages" >> $GITHUB_STEP_SUMMARY
+
+          jq -r '.Results[].Vulnerabilities[]? | .PkgName' trivy.json \
+          | sort | uniq -c | sort -nr | head -10 \
+          | while read count pkg; do
+              echo "- $pkg → $count issues" >> $GITHUB_STEP_SUMMARY
+            done
+
+      # =====================================================
+      # 🐳 C. Image Info
+      # =====================================================
+      - name: Image Info Summary
+        run: |
+          echo "## 🐳 Image Info" >> $GITHUB_STEP_SUMMARY
+          echo "- Image: shettymalathi113/github-actions-capstone" >> $GITHUB_STEP_SUMMARY
+          echo "- Build: v1.0.${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Commit: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+
+      # =====================================================
+      # 🚨 D. Security Verdict
+      # =====================================================
+      - name: Security Verdict
+        run: |
+          CRITICAL=$(jq '[.Results[].Vulnerabilities[]? | select(.Severity=="CRITICAL")] | length' trivy.json)
+
+          if [ "$CRITICAL" -gt 0 ]; then
+            echo "## 🚨 SECURITY STATUS: BLOCKED" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "## ✅ SECURITY STATUS: CLEAN" >> $GITHUB_STEP_SUMMARY
+          fi
+
+
+# =========================================================
+# 7. DEPLOY (ONLY IF CLEAN)
 # =========================================================
   deploy:
     name: Deploy
@@ -249,5 +293,5 @@ jobs:
     steps:
       - name: Deploy App
         run: |
-          echo "Deploying v1.0.${{ github.run_number }}"
-          echo "Application LIVE 🚀"
+          echo "🚀 Deploying v1.0.${{ github.run_number }}"
+          echo "Application LIVE"
