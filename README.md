@@ -228,3 +228,31 @@ pages build and deployment: https://github.com/malathi-shetty/github-actions-cap
 - Scheduled Docker health checks
 - GitHub Pages deployment
 - Shift-Left DevSecOps implementation
+
+---
+
+## Acknowledgements
+
+This project was developed as part of the 90 Days of DevOps learning journey and further extended with additional production-style DevSecOps practices and CI/CD automation.
+
+The implementation includes enhancements such as:
+* Reusable GitHub Actions workflows
+* Docker image build and version tagging
+* Trivy vulnerability scanning
+* DevSecOps security integration with Trivy
+* SARIF-based GitHub Code Scanning integration
+* Security gate enforcement for HIGH/CRITICAL vulnerabilities
+* Structured artifact generation and reporting
+* Automated reporting workflows
+* Dependency review checks
+* Scheduled Docker health checks
+* Scheduled health monitoring
+* GitHub Pages deployment automation
+
+---
+
+## Learning references:
+
+* [90 Days of DevOps — TrainWithShubham](https://github.com/malathi-shetty/90DaysOfDevOps_TrainWithShubham/tree/master/2026)
+* [Day 48 — GitHub Actions CI/CD](https://github.com/malathi-shetty/90DaysOfDevOps_TrainWithShubham/tree/master/2026/day-48)
+* [Day 49 — DevSecOps with Trivy & Security Automation](https://github.com/malathi-shetty/90DaysOfDevOps_TrainWithShubham/tree/master/2026/day-49)
